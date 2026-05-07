@@ -308,7 +308,7 @@
     console.log('App: بدء تهيئة التطبيق الرئيسي...');
     
     // منع التهيئة المتكررة
-    if (window.DOMS.app.initialized) {
+    if (window.DOMS && window.DOMS.app && window.DOMS.app.initialized) {
       console.log('App: التطبيق مهيأ بالفعل');
       return;
     }
@@ -321,7 +321,8 @@
     }
 
     // التحقق من المصادقة قبل تهيئة التطبيق
-    if (!auth.isAuthenticated()) {
+    var auth = window.DOMS.auth;
+    if (!auth || !auth.isAuthenticated()) {
       console.log('App: المستخدم غير مصادق، إلغاء التهيئة');
       return; // إذا لم يكن المستخدم مسجل دخوله، سيتم إظهار شاشة تسجيل الدخول تلقائياً
     }
