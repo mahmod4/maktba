@@ -47,11 +47,27 @@
     localStorage.setItem(CFG.ORDERS_LOCAL, JSON.stringify(orders));
   }
 
+  var sharedClient = null;
+
   function getClient() {
     var creds = CFG.getSupabaseCredentials();
     if (!creds.useSupabase || !creds.url || !creds.key) return null;
     if (!window.supabase || !window.supabase.createClient) return null;
-    return window.supabase.createClient(creds.url, creds.key);
+
+    // استخدام العميل المشترك إذا كان متوافقاً
+    if (sharedClient) {
+      return sharedClient;
+    }
+
+    // محاولة استخدام عميل auth.js إذا كان موجوداً
+    if (window.DOMS && window.DOMS.authClient) {
+      sharedClient = window.DOMS.authClient;
+      return sharedClient;
+    }
+
+    sharedClient = window.supabase.createClient(creds.url, creds.key);
+    window.DOMS.authClient = sharedClient;
+    return sharedClient;
   }
 
   async function upsertRemoteSchema(fields) {
