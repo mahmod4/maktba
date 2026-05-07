@@ -77,8 +77,8 @@
     var client = initSupabase();
     if (!client) return false;
     
-    var session = client.auth.session();
-    return !!(session && session.user);
+    var session = client.auth.getSession();
+    return !!(session && session.data && session.data.user);
   }
 
   /**
@@ -95,8 +95,8 @@
     try {
       var client = initSupabase();
       if (!client) return null;
-      var session = client.auth.session();
-      return session ? session.user : null;
+      var session = client.auth.getSession();
+      return (session && session.data && session.data.user) ? session.data.user : null;
     } catch (e) {
       return null;
     }
@@ -113,19 +113,19 @@
         return;
       }
 
-      client.auth.signIn({
+      client.auth.signInWithPassword({
         email: email,
         password: password
       })
       .then(function(response) {
         if (response.error) {
           reject(new Error(response.error.message || 'فشل تسجيل الدخول'));
-        } else if (response.session) {
-          saveSessionData(response.session);
+        } else if (response.data) {
+          saveSessionData(response.data);
           resolve({
             success: true,
-            user: response.session.user,
-            session: response.session
+            user: response.data.user,
+            session: response.data
           });
         } else {
           reject(new Error('لم يتم استلام جلسة صالحة'));
@@ -158,7 +158,7 @@
         } else {
           resolve({
             success: true,
-            user: response.user,
+            user: response.data.user,
             message: 'تم إنشاء الحساب بنجاح. يرجى تفعيل البريد الإلكتروني.'
           });
         }
