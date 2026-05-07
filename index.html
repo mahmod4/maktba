@@ -36,9 +36,15 @@
                 <input type="password" class="input" id="password" required autocomplete="current-password" />
               </label>
               <div class="login-error" id="loginError" hidden></div>
+              <div class="login-hint muted small" id="loginHint" hidden style="margin-top:8px;text-align:center;">
+                يجب إعداد Supabase في الإعدادات أولاً
+              </div>
             </div>
             <div class="login-footer">
               <button type="submit" class="btn btn-primary btn-full">دخول</button>
+              <button type="button" class="btn btn-ghost btn-sm btn-full" id="goToSettingsBtn" hidden style="margin-top:8px;">
+                ⚙️ الانتقال إلى الإعدادات
+              </button>
             </div>
           </form>
         </div>
@@ -129,8 +135,8 @@
           <section id="view-schema" class="view hidden" aria-label="مصمّم الحقول">
             <div class="schema-intro card">
               <p>
-                أسس نموذج طلباتك بدون برمجة: أضف الخانات، عدّل الأنواع، وحدّد الظهور في النموذج والجدول والبحث والفلترة، ويحدّث النظام الواجهة تلقائيًا.
-                <strong>المفتاح الداخلي (slug)</strong> هو اسم تقني مختصر بدون مسافات (مثل <code dir="ltr">customer_name</code>) يُخزَّن القيم تحته في قاعدة البيانات ويستخدم في CSV والربط؛ اجعله إنجليزيًا بسيطًا ولا تغيّره بعد بدء الطلبات إن أمكن.
+               
+                <strong> </strong>     ( <code dir="ltr">customer_name</code>) 
               </p>
             </div>
             <div class="schema-toolbar toolbar">

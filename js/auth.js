@@ -11,21 +11,30 @@
   /**
    * تهيئة Supabase client
    */
+  // افتراضيات يمكن تعديلها لبيئتك
+  var DEFAULT_SUPABASE_URL = '';
+  var DEFAULT_SUPABASE_KEY = '';
+
   function initSupabase() {
     if (supabase) return supabase;
     
     var CFG = window.DOMS.config;
     var credentials = CFG.getSupabaseCredentials();
     
-    if (!credentials.url || !credentials.key || !credentials.useSupabase) {
+    var url = credentials.url || DEFAULT_SUPABASE_URL;
+    var key = credentials.key || DEFAULT_SUPABASE_KEY;
+    
+    if (!url || !key || !credentials.useSupabase) {
+      console.warn('Auth: بيانات Supabase غير مكتملة');
       return null;
     }
     
     try {
-      supabase = window.supabase.createClient(credentials.url, credentials.key, {
+      supabase = window.supabase.createClient(url, key, {
         auth: {
           persistSession: true,
-          autoRefreshToken: true
+          autoRefreshToken: true,
+          detectSessionInUrl: true
         }
       });
       return supabase;
@@ -139,12 +148,12 @@
       .then(function(response) {
         if (response.error) {
           reject(new Error(response.error.message || 'فشل تسجيل الدخول'));
-        } else if (response.data) {
-          saveSessionData(response.data);
+        } else if (response.data && response.data.session) {
+          saveSessionData(response.data.session);
           resolve({
             success: true,
             user: response.data.user,
-            session: response.data
+            session: response.data.session
           });
         } else {
           reject(new Error('لم يتم استلام جلسة صالحة'));
@@ -279,14 +288,60 @@
 
     console.log('Auth: Supabase جاهز، التحقق من الجلسة...');
     
-    // التحقق السريع من الجلسة المحلية أولاً
-    if (isAuthenticatedSync()) {
-      console.log('Auth: جلسة محلية موجودة');
-      showApp();
-      startAppIfNeeded();
+    var client = initSupabase();
+
+    // استمع لتغييرات حالة المصادقة
+    if (client) {
+      client.auth.onAuthStateChange(function(event, session) {
+        console.log('Auth: حالة المصادقة تغيرت:', event);
+        if (event === 'SIGNED_IN' && session) {
+          saveSessionData(session);
+          showApp();
+          startAppIfNeeded();
+        } else if (event === 'SIGNED_OUT') {
+          clearAuthData();
+          showLoginScreen();
+        }
+      });
+    }
+
+    // استعادة الجلسة بشكل صحيح من Supabase
+    if (client) {
+      client.auth.getSession().then(function(result) {
+        if (result.data && result.data.session) {
+          console.log('Auth: جلسة Supabase موجودة');
+          saveSessionData(result.data.session);
+          showApp();
+          startAppIfNeeded();
+        } else {
+          console.log('Auth: لا توجد جلسة Supabase');
+          // التحقق من الجلسة المحلية كاحتياطي
+          if (isAuthenticatedSync()) {
+            console.log('Auth: جلسة محلية موجودة');
+            showApp();
+            startAppIfNeeded();
+          } else {
+            showLoginScreen();
+          }
+        }
+      }).catch(function(err) {
+        console.error('Auth: خطأ في استعادة الجلسة:', err);
+        if (isAuthenticatedSync()) {
+          showApp();
+          startAppIfNeeded();
+        } else {
+          showLoginScreen();
+        }
+      });
     } else {
-      console.log('Auth: لا توجد جلسة محلية، إظهار شاشة الدخول');
-      showLoginScreen();
+      // بدون Supabase - استخدم الجلسة المحلية
+      if (isAuthenticatedSync()) {
+        console.log('Auth: جلسة محلية موجودة (بدون Supabase)');
+        showApp();
+        startAppIfNeeded();
+      } else {
+        showLoginScreen();
+      }
     }
 
     // ربط حدث تسجيل الدخول

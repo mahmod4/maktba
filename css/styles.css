@@ -1022,8 +1022,8 @@ code {
     z-index: 100024;
     top: 0;
     bottom: 0;
-    inset-inline-end: 0;
-    inset-inline-start: auto;
+    inset-inline-start: 0;
+    inset-inline-end: auto;
     width: min(302px, 92vw);
     max-width: 92vw;
     height: 100dvh;
@@ -1032,6 +1032,7 @@ code {
     padding-inline: 1rem;
     padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
     transform: translateX(calc(100% + 24px));
+    pointer-events: none;
     transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
     box-shadow: -16px 0 48px rgba(15, 23, 42, 0.1);
     border-inline-start: none;
@@ -1040,6 +1041,7 @@ code {
 
   .sidebar.is-open {
     transform: translateX(0);
+    pointer-events: auto;
   }
 
   .sidebar-close-btn {
