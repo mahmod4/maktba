@@ -89,6 +89,20 @@
   }
 
   /**
+   * الحصول على المستخدم الحالي
+   */
+  function getCurrentUser() {
+    try {
+      var client = initSupabase();
+      if (!client) return null;
+      var session = client.auth.session();
+      return session ? session.user : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * تسجيل الدخول
    */
   function login(email, password) {
@@ -206,17 +220,29 @@
    * تهيئة نظام المصادقة
    */
   function init() {
+    console.log('Auth: بدء التهيئة...');
+    
     // الانتظار حتى تحميل جميع المكتبات
     if (!isSupabaseReady()) {
-      // إعادة المحاولة بعد 100ms
-      setTimeout(init, 100);
+      console.log('Auth: Supabase ليس جاهزاً بعد، إعادة المحاولة...');
+      setTimeout(init, 200);
       return;
     }
 
+    console.log('Auth: Supabase جاهز، التحقق من الجلسة...');
+    
     // التحقق من وجود جلسة سابقة
-    if (isAuthenticated()) {
+    var user = getCurrentUser();
+    if (user) {
+      console.log('Auth: جلست مستخدم موجودة:', user.email);
       showApp();
+      // تهيئة التطبيق إذا لم يكن مهيأً
+      if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
+        window.DOMS.app.init();
+        window.DOMS.app.initialized = true;
+      }
     } else {
+      console.log('Auth: لا توجد جلسة، إظهار شاشة الدخول');
       showLoginScreen();
     }
 
@@ -264,10 +290,13 @@
 
         login(email, password)
           .then(function(result) {
+            console.log('Auth: تسجيل الدخول نجح:', result.user.email);
             showApp();
             // تهيئة التطبيق الرئيسي بعد تسجيل الدخول
-            if (window.DOMS && window.DOMS.app && window.DOMS.app.init) {
+            if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
+              console.log('Auth: تهيئة التطبيق بعد تسجيل الدخول...');
               window.DOMS.app.init();
+              window.DOMS.app.initialized = true;
             }
           })
           .catch(function(error) {
