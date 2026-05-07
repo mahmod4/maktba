@@ -65,7 +65,9 @@
       return sharedClient;
     }
 
-    sharedClient = window.supabase.createClient(creds.url, creds.key);
+    sharedClient = window.supabase.createClient(creds.url, creds.key, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
     window.DOMS.authClient = sharedClient;
     return sharedClient;
   }
@@ -192,6 +194,13 @@
     var oid = n.id;
     if (oid && ENG.isUuid(String(oid))) row.id = oid;
 
+    var user = null;
+    try {
+      var sess = await client.auth.getSession();
+      user = sess?.data?.session?.user || null;
+    } catch (e) { /* ignore */ }
+    if (user && user.id) row.user_id = user.id;
+
     var res = await client.from('orders').insert(row).select().single();
     if (res.error) throw res.error;
     return remoteRowToOrder(res.data);
@@ -296,7 +305,14 @@
   async function appendOrder(order) {
     var n = ENG.normalizeOrder(order);
     var creds = CFG.getSupabaseCredentials();
-    if (creds.useSupabase && getClient()) return insertRemoteOrder(n);
+    if (creds.useSupabase && getClient()) {
+      try {
+        return await insertRemoteOrder(n);
+      } catch (e) {
+        console.warn('فشل الحفظ في Supabase، يتم الاحتفاظ محلياً:', e.message || e);
+        /* fallback to local */
+      }
+    }
 
     var all = hydrateLocalOrders();
     all.unshift(n);

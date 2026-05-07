@@ -37,6 +37,7 @@
           detectSessionInUrl: true
         }
       });
+      window.DOMS.authClient = supabase;
       return supabase;
     } catch (e) {
       console.error('فشل تهيئة Supabase:', e);
