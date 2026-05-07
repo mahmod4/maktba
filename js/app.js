@@ -305,6 +305,12 @@
   };
 
   function init() {
+    // الانتظار حتى تهيئة المصادقة
+    if (!window.DOMS || !window.DOMS.auth) {
+      setTimeout(init, 100);
+      return;
+    }
+
     // التحقق من المصادقة قبل تهيئة التطبيق
     if (!auth.isAuthenticated()) {
       return; // إذا لم يكن المستخدم مسجل دخوله، سيتم إظهار شاشة تسجيل الدخول تلقائياً
@@ -333,4 +339,10 @@
   } else {
     init();
   }
+
+  // تصدير دالة التهيئة للاستخدام الخارجي
+  window.DOMS = window.DOMS || {};
+  window.DOMS.app = {
+    init: init
+  };
 })();

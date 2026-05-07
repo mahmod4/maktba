@@ -82,6 +82,13 @@
   }
 
   /**
+   * التحقق إذا كان Supabase جاهز
+   */
+  function isSupabaseReady() {
+    return !!(window.supabase && window.DOMS && window.DOMS.config);
+  }
+
+  /**
    * تسجيل الدخول
    */
   function login(email, password) {
@@ -199,6 +206,13 @@
    * تهيئة نظام المصادقة
    */
   function init() {
+    // الانتظار حتى تحميل جميع المكتبات
+    if (!isSupabaseReady()) {
+      // إعادة المحاولة بعد 100ms
+      setTimeout(init, 100);
+      return;
+    }
+
     // التحقق من وجود جلسة سابقة
     if (isAuthenticated()) {
       showApp();
@@ -235,6 +249,15 @@
           return;
         }
 
+        // التحقق مرة أخرى من جاهزية Supabase
+        if (!isSupabaseReady()) {
+          if (errorEl) {
+            errorEl.textContent = 'النظام لم يكتمل التحميل بعد. يرجى الانتظار قليلاً.';
+            errorEl.hidden = false;
+          }
+          return;
+        }
+
         // تعطيل الزر أثناء المحاولة
         submitBtn.disabled = true;
         submitBtn.textContent = 'جاري الدخول...';
@@ -242,6 +265,10 @@
         login(email, password)
           .then(function(result) {
             showApp();
+            // تهيئة التطبيق الرئيسي بعد تسجيل الدخول
+            if (window.DOMS && window.DOMS.app && window.DOMS.app.init) {
+              window.DOMS.app.init();
+            }
           })
           .catch(function(error) {
             if (errorEl) {
