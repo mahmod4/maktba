@@ -23,8 +23,8 @@
     
     var url = credentials.url || DEFAULT_SUPABASE_URL;
     var key = credentials.key || DEFAULT_SUPABASE_KEY;
-    
-    if (!url || !key || !credentials.useSupabase) {
+
+    if (!url || !key) {
       console.warn('Auth: بيانات Supabase غير مكتملة');
       return null;
     }
@@ -194,6 +194,26 @@
       .catch(function(error) {
         reject(new Error('خطأ في الاتصال: ' + error.message));
       });
+    });
+  }
+
+  /**
+   * وضع تجريبي: تسجيل دخول محلي بدون خادم
+   */
+  function demoLogin(email, password) {
+    return new Promise(function(resolve, reject) {
+      if (!email || !password) {
+        reject(new Error('يرجى إدخال البريد وكلمة المرور'));
+        return;
+      }
+      var session = {
+        user: { id: 'demo-' + Date.now(), email: email, role: 'authenticated' },
+        access_token: 'demo-token-' + Math.random().toString(36).slice(2),
+        refresh_token: 'demo-refresh-' + Math.random().toString(36).slice(2),
+        expires_at: Date.now() + 86400000
+      };
+      saveSessionData(session);
+      resolve({ success: true, user: session.user, session: session });
     });
   }
 
@@ -382,11 +402,28 @@
           return;
         }
 
+        // التحقق من وجود بيانات Supabase
+        var credentials = window.DOMS.config.getSupabaseCredentials();
+        if (!credentials.url || !credentials.key) {
+          if (errorEl) {
+            errorEl.textContent = 'بيانات Supabase غير مكتملة. أدخل الرابط والمفتاح في الإعدادات أولاً.';
+            errorEl.hidden = false;
+          }
+          var hint = document.getElementById('loginHint');
+          var goBtn = document.getElementById('goToSettingsBtn');
+          if (hint) hint.hidden = false;
+          if (goBtn) goBtn.hidden = false;
+          return;
+        }
+
         // تعطيل الزر أثناء المحاولة
         submitBtn.disabled = true;
         submitBtn.textContent = 'جاري الدخول...';
 
-        login(email, password)
+        var useDemo = !credentials.url || !credentials.key;
+        var authPromise = useDemo ? demoLogin(email, password) : login(email, password);
+
+        authPromise
           .then(function(result) {
             console.log('Auth: تسجيل الدخول نجح:', result.user.email);
             showApp();
@@ -423,6 +460,7 @@
     isAuthenticated: isAuthenticated,
     isAuthenticatedSync: isAuthenticatedSync,
     login: login,
+    demoLogin: demoLogin,
     signup: signup,
     logout: logout,
     showLoginScreen: showLoginScreen,

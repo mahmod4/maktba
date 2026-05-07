@@ -4,6 +4,11 @@
  */
 (function () {
   var KEY = 'doms_user_settings_v1';
+
+  /* ── افتراضيات مضمنة: عدّل هنا لتعمل على كل الأجهزة بدون إعداد يدوي ── */
+  var DEFAULT_SUPABASE_URL = 'https://nhizwukdxpinkwluohib.supabase.co';
+  var DEFAULT_SUPABASE_KEY = '';  /* مثال: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oaXp3dWtkeHBpbmt3bHVvaGliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNDQ0MzUsImV4cCI6MjA5MzcyMDQzNX0.LAnWK1vCg103cX0R0tI_ZSKoZGEHAvzE1m6lb_N9_6U' */
+
   function loadSettings() {
     try {
       var raw = localStorage.getItem(KEY);
@@ -30,10 +35,13 @@
     saveSettings: saveSettings,
     getSupabaseCredentials: function () {
       var s = loadSettings();
+      var url = (s.supabaseUrl || '').trim() || DEFAULT_SUPABASE_URL;
+      var key = (s.supabaseKey || '').trim() || DEFAULT_SUPABASE_KEY;
+      var hasCredentials = !!(url && key);
       return {
-        url: (s.supabaseUrl || '').trim(),
-        key: (s.supabaseKey || '').trim(),
-        useSupabase: !!s.useSupabase,
+        url: url,
+        key: key,
+        useSupabase: hasCredentials || !!s.useSupabase,
       };
     },
   };
