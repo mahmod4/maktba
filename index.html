@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- لون شريط الحالة على الجوال يطابق الثيم الفاتح -->
+    <meta name="theme-color" content="#e8fbf5" />
+    <title>DOMS — إدارة طلبات ديناميكية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <!-- غطاء شفاف: يُستلم النقر بالفعل (عكس ::before على body فقط)، لإغلاق القائمة على الهاتف -->
+      <button type="button" class="nav-backdrop" id="navBackdrop" hidden tabindex="-1" aria-hidden="true" title="إغلاق القائمة">
+      </button>
+
+      <aside class="sidebar" id="appSidebar" aria-label="التنقل الجانبي">
+        <header class="sidebar-head">
+          <div class="brand">
+            <span class="brand-badge" aria-hidden="true">⚡</span>
+            <div>
+              <div class="brand-title">DOMS</div>
+              <div class="brand-sub">محرّك طلبات ديناميكي</div>
+            </div>
+          </div>
+          <!-- يظهر فقط ضمن نقطة توقف الجوال؛ يدويًا لتفادي اعتماد الإيماءات فقط -->
+          <button type="button" class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="إغلاق القائمة">
+            ✕
+          </button>
+        </header>
+        <nav class="nav-main" id="mainNav">
+          <button type="button" class="nav-btn is-active" data-view="orders" aria-current="page">
+            <span class="nav-icon" aria-hidden="true">📋</span>
+            الطلبات
+          </button>
+          <button type="button" class="nav-btn" data-view="schema">
+            <span class="nav-icon" aria-hidden="true">🧩</span>
+            تصميم النموذج
+          </button>
+          <button type="button" class="nav-btn" data-view="settings">
+            <span class="nav-icon" aria-hidden="true">⚙️</span>
+            الإعدادات
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="storage-pill" id="storageStatus" title="حالة التخزين">محلي</div>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar">
+          <button
+            type="button"
+            class="menu-toggle"
+            id="menuToggle"
+            aria-expanded="false"
+            aria-controls="appSidebar mainNav"
+            aria-label="فتح القائمة"
+          >
+            ☰
+          </button>
+          <h1 class="page-title" id="pageTitle">الطلبات</h1>
+          <div class="topbar-actions" id="topbarActions"></div>
+        </header>
+
+        <main class="content">
+          <section id="view-orders" class="view view-orders">
+            <div class="toolbar">
+              <label class="search-wrap">
+                <span class="visually-hidden">بحث شامل</span>
+                <span class="search-icon" aria-hidden="true">🔎</span>
+                <input type="search" id="globalSearch" class="input search-input" placeholder="بحث: الحقول + رمز المرجع + الحالة…" autocomplete="off" />
+              </label>
+              <label class="order-status-filter field-inline">
+                <span class="field-label small muted">حالة الطلب</span>
+                <select id="orderStatusFilter" class="input btn-sm" aria-label="تصفية حسب الحالة"></select>
+              </label>
+              <div class="filter-chips" id="filterBar" aria-label="مرشّحات"></div>
+              <button type="button" class="btn btn-secondary btn-sm" id="clearFiltersBtn">مسح المرشّحات</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="exportCsvBtn">تصدير CSV</button>
+            </div>
+            <div class="table-shell">
+              <div class="table-scroll">
+                <table class="orders-table orders-table--responsive" id="ordersTable">
+                  <thead><tr id="ordersHead"><th>التاريخ</th><th>إجراءات</th></tr></thead>
+                  <tbody id="ordersBody"><tr><td colspan="999" class="empty-cell">لا توجد طلبات بعد.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="view-schema" class="view hidden" aria-label="مصمّم الحقول">
+            <div class="schema-intro card">
+              <p>
+                أسس نموذج طلباتك بدون برمجة: أضف الخانات، عدّل الأنواع، وحدّد الظهور في النموذج والجدول والبحث والفلترة، ويحدّث النظام الواجهة تلقائيًا.
+                <strong>المفتاح الداخلي (slug)</strong> هو اسم تقني مختصر بدون مسافات (مثل <code dir="ltr">customer_name</code>) يُخزَّن القيم تحته في قاعدة البيانات ويستخدم في CSV والربط؛ اجعله إنجليزيًا بسيطًا ولا تغيّره بعد بدء الطلبات إن أمكن.
+              </p>
+            </div>
+            <div class="schema-toolbar toolbar">
+              <button type="button" class="btn btn-primary" id="addFieldBtn">+ خانة جديدة</button>
+              <button type="button" class="btn btn-secondary" id="resetDemoBtn">إعادة بيانات تجريبية</button>
+            </div>
+            <div class="field-list card" id="fieldList" aria-live="polite"></div>
+          </section>
+
+          <section id="view-settings" class="view hidden">
+            <div class="card stack">
+              <h2 class="card-title">Supabase (سحابي)</h2>
+              <p class="muted small">
+                اترك الحقول فارغة لاستخدام التخزين المحلي فقط. بعد إنشاء الجداول من الملف
+                <code>supabase/schema.sql</code>
+                أدخل المفتاح والرابط ثم فعّل الاتصال.
+              </p>
+              <label class="field">
+                <span class="field-label">Project URL</span>
+                <input type="url" class="input" id="cfgUrl" placeholder="https://xxxx.supabase.co" />
+              </label>
+              <label class="field">
+                <span class="field-label">anon public key</span>
+                <input type="password" class="input" id="cfgKey" placeholder="eyJhbGciOi..." autocomplete="off" />
+              </label>
+              <label class="check">
+                <input type="checkbox" id="cfgUseSupabase" />
+                <span>استخدام Supabase بدل التخزين المحلي</span>
+              </label>
+              <div class="row gap">
+                <button type="button" class="btn btn-primary" id="saveConfigBtn">حفظ الإعدادات</button>
+                <button type="button" class="btn btn-secondary" id="testSupabaseBtn">اختبار الاتصال</button>
+              </div>
+              <p class="muted small" id="configMessage"></p>
+            </div>
+            <div class="card stack">
+              <h2 class="card-title">نسخ احتياطي محلي</h2>
+              <div class="row gap wrap">
+                <button type="button" class="btn btn-secondary" id="exportJsonBtn">تصدير JSON</button>
+                <label class="btn btn-ghost file-btn">
+                  استيراد JSON
+                  <input type="file" id="importJsonInput" accept="application/json" hidden />
+                </label>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- نموذج طلب جديد -->
+    <dialog class="modal" id="orderModal" aria-labelledby="orderModalTitle">
+      <form class="modal-inner" id="orderForm" novalidate>
+        <header class="modal-head">
+          <h2 id="orderModalTitle">طلب جديد</h2>
+          <button type="button" class="icon-btn" id="orderModalClose" aria-label="إغلاق">✕</button>
+        </header>
+        <div class="modal-body stack" id="orderFormFields"></div>
+        <footer class="modal-foot row gap">
+          <button type="submit" class="btn btn-primary" value="default">حفظ الطلب</button>
+          <button type="button" class="btn btn-ghost" id="orderModalCancel">إلغاء</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <!-- تفاصيل -->
+    <dialog class="modal" id="detailModal" aria-labelledby="detailModalTitle">
+      <div class="modal-inner">
+        <header class="modal-head">
+          <h2 id="detailModalTitle">تفاصيل الطلب</h2>
+          <button type="button" class="icon-btn" id="detailModalClose" aria-label="إغلاق">✕</button>
+        </header>
+        <div class="modal-body stack" id="detailBody"></div>
+        <footer class="modal-foot row gap">
+          <button type="button" class="btn btn-danger" id="deleteOrderBtn">حذف الطلب</button>
+          <button type="button" class="btn btn-ghost" id="detailModalDismiss">إغلاق</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/engine.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/ui-schema.js"></script>
+    <script src="js/ui-orders.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
