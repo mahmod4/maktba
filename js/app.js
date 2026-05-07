@@ -12,6 +12,7 @@
   var storage = window.DOMS.storage;
   var schemaUI = window.DOMS.schemaUI;
   var ordersUI = window.DOMS.ordersUI;
+  var auth = window.DOMS.auth;
 
   /** عناصر التنقل السريع لمطابقة عنوان كل قسم مع محتواه */
   var views = {
@@ -304,6 +305,11 @@
   };
 
   function init() {
+    // التحقق من المصادقة قبل تهيئة التطبيق
+    if (!auth.isAuthenticated()) {
+      return; // إذا لم يكن المستخدم مسجل دخوله، سيتم إظهار شاشة تسجيل الدخول تلقائياً
+    }
+
     wireNavigation();
 
     /** يبدأ الغطاء مخفيًا لتجنب اعتراض النقر قبل فتح القائمة */

@@ -66,6 +66,90 @@ body {
   color: var(--text);
 }
 
+/* شاشة تسجيل الدخول */
+.login-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+  background: inherit;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.login-header {
+  padding: 32px 32px 24px;
+  background: linear-gradient(170deg, #ffffff 0%, #faf5ff 38%, #f0fdfa 100%);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.login-header .brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-header .brand-badge {
+  font-size: 2.5rem;
+  filter: drop-shadow(0 4px 12px rgba(14, 165, 233, 0.25));
+}
+
+.login-header .brand-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.login-header .brand-sub {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.login-body {
+  padding: 32px;
+}
+
+.login-error {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  text-align: center;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.login-footer {
+  padding: 0 32px 32px;
+}
+
+.btn-full {
+  width: 100%;
+  justify-content: center;
+}
+
 /* إيقاف التمرير عند فتح القائمة جانب الجوال لتفادي «حركة الخلفية» */
 body.sidebar-open {
   overflow: hidden;

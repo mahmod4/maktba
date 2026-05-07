@@ -12,7 +12,41 @@
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
-    <div class="app" id="app">
+    <!-- شاشة تسجيل الدخول -->
+    <div class="login-screen" id="loginScreen">
+      <div class="login-container">
+        <div class="login-card">
+          <div class="login-header">
+            <div class="brand">
+              <span class="brand-badge">⚡</span>
+              <div>
+                <div class="brand-title">DOMS</div>
+                <div class="brand-sub">محرّك طلبات ديناميكي</div>
+              </div>
+            </div>
+          </div>
+          <form class="login-form" id="loginForm">
+            <div class="login-body">
+              <label class="field">
+                <span class="field-label">البريد الإلكتروني</span>
+                <input type="email" class="input" id="username" required autocomplete="email" />
+              </label>
+              <label class="field">
+                <span class="field-label">كلمة المرور</span>
+                <input type="password" class="input" id="password" required autocomplete="current-password" />
+              </label>
+              <div class="login-error" id="loginError" hidden></div>
+            </div>
+            <div class="login-footer">
+              <button type="submit" class="btn btn-primary btn-full">دخول</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- التطبيق الرئيسي (مخفي افتراضياً) -->
+    <div class="app" id="app" hidden>
       <!-- غطاء شفاف: يُستلم النقر بالفعل (عكس ::before على body فقط)، لإغلاق القائمة على الهاتف -->
       <button type="button" class="nav-backdrop" id="navBackdrop" hidden tabindex="-1" aria-hidden="true" title="إغلاق القائمة">
       </button>
@@ -177,6 +211,7 @@
       </div>
     </dialog>
 
+    <script src="js/auth.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
     <script src="js/config.js"></script>
     <script src="js/engine.js"></script>
