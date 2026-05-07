@@ -306,76 +306,35 @@
 
   function init() {
     console.log('App: بدء تهيئة التطبيق الرئيسي...');
-    
+
     // منع التهيئة المتكررة
     if (window.DOMS && window.DOMS.app && window.DOMS.app.initialized) {
       console.log('App: التطبيق مهيأ بالفعل');
       return;
     }
 
-    // الانتظار حتى تهيئة المصادقة
-    if (!window.DOMS || !window.DOMS.auth) {
-      console.log('App: المصادقة غير جاهزة، إعادة المحاولة...');
-      setTimeout(init, 100);
-      return;
+    wireNavigation();
+
+    /** يبدأ الغطاء مخفيًا لتجنب اعتراض النقر قبل فتح القائمة */
+    if (navBackdrop) {
+      navBackdrop.hidden = true;
+      navBackdrop.setAttribute('aria-hidden', 'true');
     }
 
-    // التحقق من المصادقة قبل تهيئة التطبيق
-    var auth = window.DOMS.auth;
-    if (!auth) {
-      console.log('App: المصادقة غير موجودة، إلغاء التهيئة');
-      return;
-    }
+    schemaUI.bootstrap();
+    ordersUI.wire();
+    wireSettings();
+    setView('orders');
+    bootstrapData().catch(function (e) {
+      console.error(e);
+      alert('تعذر تحميل البيانات: ' + (e.message || String(e)));
+    });
 
-    // التحقق السريع أولاً (لتحسين الأداء)
-    if (auth.isAuthenticatedSync && auth.isAuthenticatedSync()) {
-      console.log('App: المستخدم مصادق (تحقق سريع)، متابعة التهيئة...');
-      continueInit();
-      return;
-    }
-
-    // التحقق المتزامن من المصادقة
-    auth.isAuthenticated()
-      .then(function(isAuth) {
-        if (isAuth) {
-          console.log('App: المستخدم مصادق (تحقق متزامن)، متابعة التهيئة...');
-          continueInit();
-        } else {
-          console.log('App: المستخدم غير مصادق، إلغاء التهيئة');
-        }
-      })
-      .catch(function() {
-        console.log('App: خطأ في التحقق من المصادقة، إلغاء التهيئة');
-      });
-
-    function continueInit() {
-      // منع التهيئة المزدوج
-      if (window.DOMS.app.initialized) {
-        console.log('App: التهيئة اكتملت بالفعل');
-        return;
-      }
-
-      wireNavigation();
-
-      /** يبدأ الغطاء مخفيًا لتجنب اعتراض النقر قبل فتح القائمة */
-      if (navBackdrop) {
-        navBackdrop.hidden = true;
-        navBackdrop.setAttribute('aria-hidden', 'true');
-      }
-
-      schemaUI.bootstrap();
-      ordersUI.wire();
-      wireSettings();
-      setView('orders');
-      bootstrapData().catch(function (e) {
-        console.error(e);
-        alert('تعذر تحميل البيانات: ' + (e.message || String(e)));
-      });
-
-      // تعيين علامة التهيئة
-      window.DOMS.app.initialized = true;
-      console.log('App: اكتملت تهيئة التطبيق بنجاح');
-    }
+    // تعيين علامة التهيئة
+    window.DOMS = window.DOMS || {};
+    window.DOMS.app = window.DOMS.app || {};
+    window.DOMS.app.initialized = true;
+    console.log('App: اكتملت تهيئة التطبيق بنجاح');
   }
 
   if (document.readyState === 'loading') {

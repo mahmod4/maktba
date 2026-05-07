@@ -206,17 +206,23 @@
   function showLoginScreen() {
     var loginScreen = document.getElementById('loginScreen');
     var app = document.getElementById('app');
-    
-    if (loginScreen) loginScreen.hidden = false;
-    if (app) app.hidden = true;
-    
+
+    if (loginScreen) {
+      loginScreen.hidden = false;
+      loginScreen.style.display = '';
+    }
+    if (app) {
+      app.hidden = true;
+      app.style.display = 'none';
+    }
+
     // مسح أي رسائل خطأ سابقة
     var errorEl = document.getElementById('loginError');
     if (errorEl) {
       errorEl.hidden = true;
       errorEl.textContent = '';
     }
-    
+
     // مسح حقول الإدخال
     var usernameEl = document.getElementById('username');
     var passwordEl = document.getElementById('password');
@@ -228,11 +234,34 @@
    * إظهار التطبيق الرئيسي
    */
   function showApp() {
+    console.log('Auth: إظهار التطبيق...');
     var loginScreen = document.getElementById('loginScreen');
     var app = document.getElementById('app');
-    
-    if (loginScreen) loginScreen.hidden = true;
-    if (app) app.hidden = false;
+
+    if (loginScreen) {
+      loginScreen.hidden = true;
+      loginScreen.style.display = 'none';
+    }
+    if (app) {
+      app.hidden = false;
+      app.style.display = '';
+    }
+    console.log('Auth: تم إظهار التطبيق');
+  }
+
+  /**
+   * بدء التطبيق إذا لم يكن قد بدأ
+   */
+  function startAppIfNeeded() {
+    if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
+      console.log('Auth: بدء تهيئة التطبيق...');
+      window.DOMS.app.init();
+    } else if (!window.DOMS || !window.DOMS.app) {
+      console.log('Auth: التطبيق غير جاهز، إعادة المحاولة بعد 200ms...');
+      setTimeout(startAppIfNeeded, 200);
+    } else {
+      console.log('Auth: التطبيق مهيأ بالفعل');
+    }
   }
 
   /**
@@ -252,32 +281,9 @@
     
     // التحقق السريع من الجلسة المحلية أولاً
     if (isAuthenticatedSync()) {
-      console.log('Auth: جلسة محلية موجودة، التحقق من الخادم...');
-      getCurrentUser()
-        .then(function(user) {
-          if (user) {
-            console.log('Auth: جلست مستخدم صالحة:', user.email);
-            showApp();
-            // تهيئة التطبيق مع محاولة يدوية
-            function tryInitApp() {
-              if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
-                window.DOMS.app.init();
-                window.DOMS.app.initialized = true;
-              } else {
-                console.log('Auth: التطبيق غير جاهز للمحاولة، إعادة المحاولة...');
-                setTimeout(tryInitApp, 100);
-              }
-            }
-            tryInitApp();
-          } else {
-            console.log('Auth: الجلسة منتهية، إظهار شاشة الدخول');
-            showLoginScreen();
-          }
-        })
-        .catch(function() {
-          console.log('Auth: خطأ في التحقق، إظهار شاشة الدخول');
-          showLoginScreen();
-        });
+      console.log('Auth: جلسة محلية موجودة');
+      showApp();
+      startAppIfNeeded();
     } else {
       console.log('Auth: لا توجد جلسة محلية، إظهار شاشة الدخول');
       showLoginScreen();
@@ -329,20 +335,7 @@
           .then(function(result) {
             console.log('Auth: تسجيل الدخول نجح:', result.user.email);
             showApp();
-            
-            // محاولة تهيئة التطبيق فوراً
-            function tryInitApp() {
-              if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
-                console.log('Auth: تهيئة التطبيق بعد تسجيل الدخول...');
-                window.DOMS.app.init();
-              } else {
-                console.log('Auth: التطبيق غير جاهز بعد، إعادة المحاولة بعد 200ms...');
-                setTimeout(tryInitApp, 200);
-              }
-            }
-            
-            // انتظار قليلاً ثم بدء المحاولة
-            setTimeout(tryInitApp, 100);
+            startAppIfNeeded();
           })
           .catch(function(error) {
             if (errorEl) {
@@ -373,6 +366,7 @@
   window.DOMS = window.DOMS || {};
   window.DOMS.auth = {
     isAuthenticated: isAuthenticated,
+    isAuthenticatedSync: isAuthenticatedSync,
     login: login,
     signup: signup,
     logout: logout,
