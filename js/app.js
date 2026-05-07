@@ -327,21 +327,34 @@
       return;
     }
 
+    // التحقق السريع أولاً (لتحسين الأداء)
+    if (auth.isAuthenticatedSync && auth.isAuthenticatedSync()) {
+      console.log('App: المستخدم مصادق (تحقق سريع)، متابعة التهيئة...');
+      continueInit();
+      return;
+    }
+
     // التحقق المتزامن من المصادقة
     auth.isAuthenticated()
       .then(function(isAuth) {
         if (isAuth) {
-          console.log('App: المستخدم مصادق، متابعة التهيئة...');
+          console.log('App: المستخدم مصادق (تحقق متزامن)، متابعة التهيئة...');
           continueInit();
         } else {
-          console.log('App: المستخدم غير مصادق، إلغاء التهي التهيئة');
+          console.log('App: المستخدم غير مصادق، إلغاء التهيئة');
         }
       })
       .catch(function() {
-        console.log('App: خطأ في التحقق من المصادقة، إلغاء التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي');
+        console.log('App: خطأ في التحقق من المصادقة، إلغاء التهيئة');
       });
 
     function continueInit() {
+      // منع التهيئة المزدوج
+      if (window.DOMS.app.initialized) {
+        console.log('App: التهيئة اكتملت بالفعل');
+        return;
+      }
+
       wireNavigation();
 
       /** يبدأ الغطاء مخفيًا لتجنب اعتراض النقر قبل فتح القائمة */

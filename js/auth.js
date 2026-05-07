@@ -258,11 +258,17 @@
           if (user) {
             console.log('Auth: جلست مستخدم صالحة:', user.email);
             showApp();
-            // تهيئة التطبيق إذا لم يكن مهيأً
-            if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
-              window.DOMS.app.init();
-              window.DOMS.app.initialized = true;
+            // تهيئة التطبيق مع محاولة يدوية
+            function tryInitApp() {
+              if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
+                window.DOMS.app.init();
+                window.DOMS.app.initialized = true;
+              } else {
+                console.log('Auth: التطبيق غير جاهز للمحاولة، إعادة المحاولة...');
+                setTimeout(tryInitApp, 100);
+              }
             }
+            tryInitApp();
           } else {
             console.log('Auth: الجلسة منتهية، إظهار شاشة الدخول');
             showLoginScreen();
@@ -323,12 +329,20 @@
           .then(function(result) {
             console.log('Auth: تسجيل الدخول نجح:', result.user.email);
             showApp();
-            // تهيئة التطبيق الرئيسي بعد تسجيل الدخول
-            if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
-              console.log('Auth: تهيئة التطبيق بعد تسجيل الدخول...');
-              window.DOMS.app.init();
-              window.DOMS.app.initialized = true;
+            
+            // محاولة تهيئة التطبيق فوراً
+            function tryInitApp() {
+              if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
+                console.log('Auth: تهيئة التطبيق بعد تسجيل الدخول...');
+                window.DOMS.app.init();
+              } else {
+                console.log('Auth: التطبيق غير جاهز بعد، إعادة المحاولة بعد 200ms...');
+                setTimeout(tryInitApp, 200);
+              }
             }
+            
+            // انتظار قليلاً ثم بدء المحاولة
+            setTimeout(tryInitApp, 100);
           })
           .catch(function(error) {
             if (errorEl) {
