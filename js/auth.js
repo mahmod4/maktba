@@ -71,14 +71,19 @@
   }
 
   /**
-   * التحقق من تسجيل الدخول
+   * التحقق من تسجيل الدخول (غير متزامن)
    */
   function isAuthenticated() {
     var client = initSupabase();
-    if (!client) return false;
+    if (!client) return Promise.resolve(false);
     
-    var session = client.auth.getSession();
-    return !!(session && session.data && session.data.user);
+    return client.auth.getSession()
+      .then(function(session) {
+        return !!(session && session.data && session.data.user);
+      })
+      .catch(function() {
+        return false;
+      });
   }
 
   /**
@@ -89,16 +94,30 @@
   }
 
   /**
-   * الحصول على المستخدم الحالي
+   * الحصول على المستخدم الحالي (غير متزامن)
    */
   function getCurrentUser() {
+    var client = initSupabase();
+    if (!client) return Promise.resolve(null);
+    
+    return client.auth.getSession()
+      .then(function(session) {
+        return (session && session.data && session.data.user) ? session.data.user : null;
+      })
+      .catch(function() {
+        return null;
+      });
+  }
+
+  /**
+   * التحقق السريع من الجلسة (متزامن)
+   */
+  function isAuthenticatedSync() {
     try {
-      var client = initSupabase();
-      if (!client) return null;
-      var session = client.auth.getSession();
-      return (session && session.data && session.data.user) ? session.data.user : null;
+      var authData = getAuthData();
+      return !!(authData && authData.user && authData.access_token);
     } catch (e) {
-      return null;
+      return false;
     }
   }
 
@@ -231,18 +250,30 @@
 
     console.log('Auth: Supabase جاهز، التحقق من الجلسة...');
     
-    // التحقق من وجود جلسة سابقة
-    var user = getCurrentUser();
-    if (user) {
-      console.log('Auth: جلست مستخدم موجودة:', user.email);
-      showApp();
-      // تهيئة التطبيق إذا لم يكن مهيأً
-      if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
-        window.DOMS.app.init();
-        window.DOMS.app.initialized = true;
-      }
+    // التحقق السريع من الجلسة المحلية أولاً
+    if (isAuthenticatedSync()) {
+      console.log('Auth: جلسة محلية موجودة، التحقق من الخادم...');
+      getCurrentUser()
+        .then(function(user) {
+          if (user) {
+            console.log('Auth: جلست مستخدم صالحة:', user.email);
+            showApp();
+            // تهيئة التطبيق إذا لم يكن مهيأً
+            if (window.DOMS && window.DOMS.app && !window.DOMS.app.initialized) {
+              window.DOMS.app.init();
+              window.DOMS.app.initialized = true;
+            }
+          } else {
+            console.log('Auth: الجلسة منتهية، إظهار شاشة الدخول');
+            showLoginScreen();
+          }
+        })
+        .catch(function() {
+          console.log('Auth: خطأ في التحقق، إظهار شاشة الدخول');
+          showLoginScreen();
+        });
     } else {
-      console.log('Auth: لا توجد جلسة، إظهار شاشة الدخول');
+      console.log('Auth: لا توجد جلسة محلية، إظهار شاشة الدخول');
       showLoginScreen();
     }
 

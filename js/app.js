@@ -322,31 +322,47 @@
 
     // التحقق من المصادقة قبل تهيئة التطبيق
     var auth = window.DOMS.auth;
-    if (!auth || !auth.isAuthenticated()) {
-      console.log('App: المستخدم غير مصادق، إلغاء التهيئة');
-      return; // إذا لم يكن المستخدم مسجل دخوله، سيتم إظهار شاشة تسجيل الدخول تلقائياً
+    if (!auth) {
+      console.log('App: المصادقة غير موجودة، إلغاء التهيئة');
+      return;
     }
 
-    wireNavigation();
+    // التحقق المتزامن من المصادقة
+    auth.isAuthenticated()
+      .then(function(isAuth) {
+        if (isAuth) {
+          console.log('App: المستخدم مصادق، متابعة التهيئة...');
+          continueInit();
+        } else {
+          console.log('App: المستخدم غير مصادق، إلغاء التهي التهيئة');
+        }
+      })
+      .catch(function() {
+        console.log('App: خطأ في التحقق من المصادقة، إلغاء التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي التهي');
+      });
 
-    /** يبدأ الغطاء مخفيًا لتجنب اعتراض النقر قبل فتح القائمة */
-    if (navBackdrop) {
-      navBackdrop.hidden = true;
-      navBackdrop.setAttribute('aria-hidden', 'true');
+    function continueInit() {
+      wireNavigation();
+
+      /** يبدأ الغطاء مخفيًا لتجنب اعتراض النقر قبل فتح القائمة */
+      if (navBackdrop) {
+        navBackdrop.hidden = true;
+        navBackdrop.setAttribute('aria-hidden', 'true');
+      }
+
+      schemaUI.bootstrap();
+      ordersUI.wire();
+      wireSettings();
+      setView('orders');
+      bootstrapData().catch(function (e) {
+        console.error(e);
+        alert('تعذر تحميل البيانات: ' + (e.message || String(e)));
+      });
+
+      // تعيين علامة التهيئة
+      window.DOMS.app.initialized = true;
+      console.log('App: اكتملت تهيئة التطبيق بنجاح');
     }
-
-    schemaUI.bootstrap();
-    ordersUI.wire();
-    wireSettings();
-    setView('orders');
-    bootstrapData().catch(function (e) {
-      console.error(e);
-      alert('تعذر تحميل البيانات: ' + (e.message || String(e)));
-    });
-
-    // تعيين علامة التهيئة
-    window.DOMS.app.initialized = true;
-    console.log('App: اكتملت تهيئة التطبيق بنجاح');
   }
 
   if (document.readyState === 'loading') {
