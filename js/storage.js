@@ -583,8 +583,15 @@
     var localMap = {};
     localOrders.forEach(function (o) { localMap[o.id] = o; });
 
+    // بناء خريطة للطلبات البعيدة
+    var remoteMap = {};
+    remoteOrders.forEach(function (r) { remoteMap[r.id] = r; });
+
     var added = 0;
     var updated = 0;
+    var deleted = 0;
+
+    // المرحلة 1: إضافة/تحديث الطلبات من السحابة
     for (var i = 0; i < remoteOrders.length; i++) {
       var r = remoteOrders[i];
       var local = localMap[r.id];
@@ -602,13 +609,30 @@
         }
       }
     }
-    var changed = added > 0 || updated > 0;
-    console.log('[Storage] mergeRemoteOrders: added=' + added + ', updated=' + updated + ', changed=' + changed);
+
+    // المرحلة 2: حذف الطلبات المحلية اللي اتحذفت من السحابة
+    // نحذف بس لو: (1) السحابة فيها بيانات (يعني الجهاز ده شاف بيانات قبل كده)
+    // أو (2) عملنا sync قبل كده (last_sync_at موجود)
+    var lastSync = await IDB.getMetadata('last_sync_at').catch(function () { return null; });
+    var hasSyncedBefore = !!lastSync;
+    if (remoteOrders.length > 0 || hasSyncedBefore) {
+      for (var j = 0; j < localOrders.length; j++) {
+        var lo = localOrders[j];
+        if (!remoteMap[lo.id]) {
+          // الطلب ده مش موجود في السحابة = اتمسح
+          await IDB.deleteOrder(lo.id);
+          deleted++;
+        }
+      }
+    }
+
+    var changed = added > 0 || updated > 0 || deleted > 0;
+    console.log('[Storage] mergeRemoteOrders: added=' + added + ', updated=' + updated + ', deleted=' + deleted + ', changed=' + changed);
 
     // تحديث localStorage
     var merged = await IDB.getAllOrders();
     writeLocalOrders(ENG.sortOrdersByDate(merged));
-    return { changed: changed, count: remoteOrders.length, added: added, updated: updated };
+    return { changed: changed, count: remoteOrders.length, added: added, updated: updated, deleted: deleted };
   }
 
   async function mergeRemoteSchema(remoteFields) {
