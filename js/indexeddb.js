@@ -242,19 +242,25 @@
   }
 
   // ── Migration من localStorage ──
-  function migrateFromLocalStorage() {
+  async function migrateFromLocalStorage() {
     var CFG = window.DOMS && window.DOMS.config;
-    if (!CFG) return Promise.resolve();
+    if (!CFG) return false;
     var migrated = false;
     try {
+      // لا ترحّل إذا كان IndexedDB يحتوي بالفعل على بيانات
+      var existingSchema = await getAllSchemaFields();
+      if (existingSchema && existingSchema.length > 0) {
+        return false;
+      }
+
       // ترحيل schema
       var rawSchema = localStorage.getItem(CFG.SCHEMA_LOCAL);
       if (rawSchema) {
         var schema = JSON.parse(rawSchema);
         if (Array.isArray(schema) && schema.length > 0) {
-          schema.forEach(function (field) {
-            putSchemaField(field);
-          });
+          await Promise.all(schema.map(function (field) {
+            return putSchemaField(field);
+          }));
         }
       }
       // ترحيل الطلبات
@@ -262,16 +268,16 @@
       if (rawOrders) {
         var orders = JSON.parse(rawOrders);
         if (Array.isArray(orders) && orders.length > 0) {
-          orders.forEach(function (order) {
-            putOrder(order);
-          });
+          await Promise.all(orders.map(function (order) {
+            return putOrder(order);
+          }));
           migrated = true;
         }
       }
     } catch (e) {
       console.warn('IDB migration error:', e);
     }
-    return Promise.resolve(migrated);
+    return migrated;
   }
 
   window.DOMS = window.DOMS || {};

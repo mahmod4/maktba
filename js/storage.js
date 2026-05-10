@@ -242,27 +242,43 @@
     }
   }
 
+  /** إزالة التكرار من الحقول بناءً على slug */
+  function deduplicateFieldsBySlug(fields) {
+    var seen = {};
+    var result = [];
+    (fields || []).forEach(function (f) {
+      var slug = f.slug || '';
+      if (!seen[slug]) {
+        seen[slug] = true;
+        result.push(f);
+      }
+    });
+    return result;
+  }
+
   /** Replace-all remote schema avoids complex diff; good enough for v1 */
   async function saveSchema(fields) {
     var creds = CFG.getSupabaseCredentials();
+    // إزالة التكرار قبل الحفظ
+    var uniqueFields = deduplicateFieldsBySlug(fields);
 
     // حفظ في IndexedDB دائماً
     await IDB.clearSchemaFields();
-    for (var i = 0; i < fields.length; i++) {
-      await IDB.putSchemaField(fields[i]);
+    for (var i = 0; i < uniqueFields.length; i++) {
+      await IDB.putSchemaField(uniqueFields[i]);
     }
     // حفظ في localStorage كاحتياطي
-    writeLocalSchema(fields);
+    writeLocalSchema(uniqueFields);
 
     if (creds.useSupabase && getClient()) {
       try {
-        return await upsertRemoteSchema(fields);
+        return await upsertRemoteSchema(uniqueFields);
       } catch (e) {
         console.warn('[Storage] Remote schema save failed, queued for sync:', e.message || e);
-        if (SYNC) SYNC.queueSchemaUpdate(fields);
+        if (SYNC) SYNC.queueSchemaUpdate(uniqueFields);
       }
     }
-    return ENG.sortFields(fields);
+    return ENG.sortFields(uniqueFields);
   }
 
   async function loadSchema(createDefaultIfEmpty) {
@@ -270,32 +286,36 @@
     // محاولة تحميل من IndexedDB أولاً
     var idbFields = await IDB.getAllSchemaFields().catch(function () { return null; });
     if (idbFields && idbFields.length) {
+      // إزالة أي تكرار قد يكون موجوداً
+      var uniqueIdb = deduplicateFieldsBySlug(idbFields);
       // محاولة تحديث من السحابة إذا كان متصل
       if (creds.useSupabase && getClient() && navigator.onLine) {
         try {
           var remote = await fetchRemoteSchema();
           if (remote && remote.length) {
+            var uniqueRemote = deduplicateFieldsBySlug(remote);
             await IDB.clearSchemaFields();
-            for (var i = 0; i < remote.length; i++) {
-              await IDB.putSchemaField(remote[i]);
+            for (var i = 0; i < uniqueRemote.length; i++) {
+              await IDB.putSchemaField(uniqueRemote[i]);
             }
-            return remote;
+            return uniqueRemote;
           }
         } catch (e) {
           console.warn('[Storage] Remote schema fetch failed, using IndexedDB:', e.message);
         }
       }
-      return ENG.sortFields(idbFields);
+      return ENG.sortFields(uniqueIdb);
     }
 
     // احتياطي: التحقق من localStorage
     var local = readLocalSchema();
     if (local && local.length) {
+      var uniqueLocal = deduplicateFieldsBySlug(local);
       // ترحيل إلى IndexedDB
-      for (var j = 0; j < local.length; j++) {
-        await IDB.putSchemaField(local[j]);
+      for (var j = 0; j < uniqueLocal.length; j++) {
+        await IDB.putSchemaField(uniqueLocal[j]);
       }
-      return ENG.sortFields(local);
+      return ENG.sortFields(uniqueLocal);
     }
     if (createDefaultIfEmpty) return saveSchema(ENG.defaultDemoSchema());
     return [];
@@ -320,34 +340,66 @@
   async function loadOrders() {
     var creds = CFG.getSupabaseCredentials();
     // محاولة تحميل من IndexedDB أولاً
-    var idbOrders = await IDB.getAllOrders().catch(function () { return null; });
-    if (idbOrders && idbOrders.length) {
-      // محاولة تحديث من السحابة إذا كان متصل
+    var idbOrders = await IDB.getAllOrders().catch(function (e) {
+      console.warn('[Storage] IndexedDB read failed:', e.message || e);
+      return null;
+    });
+
+    // إذا IndexedDB فارغ، حاول استرجاع من localStorage وإعادة بناء IndexedDB
+    if (!idbOrders || !idbOrders.length) {
+      console.log('[Storage] IndexedDB empty, trying localStorage fallback...');
+      var local = hydrateLocalOrders();
+      if (local && local.length) {
+        console.log('[Storage] Found', local.length, 'orders in localStorage, restoring IndexedDB');
+        for (var j = 0; j < local.length; j++) {
+          await IDB.putOrder(local[j]);
+        }
+        return ENG.sortOrdersByDate(local);
+      }
+      // لا توجد بيانات محلية - محاولة السحابة
       if (creds.useSupabase && getClient() && navigator.onLine) {
         try {
           var rows = await fetchRemoteOrders();
           if (rows && rows.length) {
-            await IDB.clearOrders();
-            for (var i = 0; i < rows.length; i++) {
-              await IDB.putOrder(rows[i]);
+            for (var k = 0; k < rows.length; k++) {
+              await IDB.putOrder(rows[k]);
             }
+            writeLocalOrders(ENG.sortOrdersByDate(rows));
             return ENG.sortOrdersByDate(rows);
           }
         } catch (e) {
-          console.warn('[Storage] Remote orders fetch failed, using IndexedDB:', e.message);
+          console.warn('[Storage] Remote orders fetch failed:', e.message);
         }
       }
-      return ENG.sortOrdersByDate(idbOrders);
+      return [];
     }
 
-    // احتياطي: التحقق من localStorage
-    var local = hydrateLocalOrders();
-    if (local.length) {
-      for (var j = 0; j < local.length; j++) {
-        await IDB.putOrder(local[j]);
+    // IndexedDB يحتوي على بيانات
+    if (creds.useSupabase && getClient() && navigator.onLine) {
+      try {
+        var remoteRows = await fetchRemoteOrders();
+        if (remoteRows && remoteRows.length) {
+          // دمج: احتفظ بالبيانات المحلية + أضف الجديد من السحابة
+          var localIds = {};
+          idbOrders.forEach(function (o) { localIds[o.id] = true; });
+          var merged = idbOrders.slice();
+          remoteRows.forEach(function (r) {
+            if (!localIds[r.id]) {
+              merged.push(r);
+              IDB.putOrder(r);
+            }
+          });
+          writeLocalOrders(ENG.sortOrdersByDate(merged));
+          return ENG.sortOrdersByDate(merged);
+        }
+      } catch (e) {
+        console.warn('[Storage] Remote orders fetch failed, using IndexedDB:', e.message);
       }
     }
-    return ENG.sortOrdersByDate(local);
+
+    // حافظ على نسخة احتياطية في localStorage
+    writeLocalOrders(ENG.sortOrdersByDate(idbOrders));
+    return ENG.sortOrdersByDate(idbOrders);
   }
 
   function saveOrdersLocalSnapshot(orders) {
@@ -367,9 +419,16 @@
 
     // حفظ دائماً في IndexedDB
     await IDB.putOrder(n);
-    // حفظ snapshot في localStorage كاحتياطي
+    // حفظ snapshot في localStorage - لا تكتب [] إذا IndexedDB فارغ
     var all = await IDB.getAllOrders();
-    writeLocalOrders(ENG.sortOrdersByDate(all));
+    if (all && all.length > 0) {
+      writeLocalOrders(ENG.sortOrdersByDate(all));
+    } else {
+      // IndexedDB فارغ بشكل غير متوقع - أضف الطلب الجديد لـ localStorage على الأقل
+      var localBackup = readLocalOrders();
+      localBackup.unshift(n);
+      writeLocalOrders(ENG.sortOrdersByDate(localBackup));
+    }
 
     if (creds.useSupabase && getClient()) {
       if (navigator.onLine) {
@@ -378,11 +437,9 @@
           return remote;
         } catch (e) {
           console.warn('[Storage] Remote insert failed, queued for sync:', e.message || e);
-          // إضافة للـ sync queue
           if (SYNC) SYNC.queueOrderInsert(n);
         }
       } else {
-        // أوفلاين - أضف للـ queue
         if (SYNC) SYNC.queueOrderInsert(n);
       }
     }
@@ -399,7 +456,12 @@
 
     // تحديث IndexedDB دائماً
     var order = await IDB.getOrder(id);
-    if (!order) throw new Error('الطلب غير موجود');
+    if (!order) {
+      // إذا غير موجود في IndexedDB، جرب localStorage
+      var local = hydrateLocalOrders();
+      order = local.find(function (o) { return String(o.id) === String(id); });
+      if (!order) throw new Error('الطلب غير موجود');
+    }
 
     if (patch.status !== undefined) order.status = patch.status;
     if (patch.reference !== undefined) order.reference = String(patch.reference || '').trim() || order.reference;
@@ -407,9 +469,17 @@
     order = ENG.normalizeOrder(order);
     await IDB.putOrder(order);
 
-    // حفظ snapshot في localStorage
+    // حفظ snapshot في localStorage - لا تكتب [] إذا IndexedDB فارغ
     var all = await IDB.getAllOrders();
-    writeLocalOrders(ENG.sortOrdersByDate(all));
+    if (all && all.length > 0) {
+      writeLocalOrders(ENG.sortOrdersByDate(all));
+    } else {
+      // IndexedDB فارغ - حدث localStorage يدوياً
+      var localBackup = hydrateLocalOrders();
+      var ix = localBackup.findIndex(function (o) { return String(o.id) === String(id); });
+      if (ix >= 0) localBackup[ix] = order; else localBackup.unshift(order);
+      writeLocalOrders(ENG.sortOrdersByDate(localBackup));
+    }
 
     if (creds.useSupabase && getClient()) {
       if (navigator.onLine) {
@@ -432,11 +502,15 @@
 
     // حذف من IndexedDB دائماً
     await IDB.deleteOrder(id);
-    // تحديث localStorage
-    var all = (await IDB.getAllOrders()).filter(function (o) {
-      return o.id !== id;
-    });
-    writeLocalOrders(all);
+    // تحديث localStorage - لا تكتب [] إذا IndexedDB فارغ
+    var all = await IDB.getAllOrders();
+    if (all && all.length >= 0) {
+      writeLocalOrders(all.filter(function (o) { return o.id !== id; }));
+    } else {
+      // IndexedDB فارغ - حدث localStorage يدوياً
+      var localBackup = readLocalOrders().filter(function (o) { return o.id !== id; });
+      writeLocalOrders(localBackup);
+    }
 
     if (creds.useSupabase && getClient()) {
       if (navigator.onLine) {
