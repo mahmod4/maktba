@@ -247,12 +247,6 @@
     if (!CFG) return false;
     var migrated = false;
     try {
-      // لا ترحّل إذا كان IndexedDB يحتوي بالفعل على بيانات
-      var existingSchema = await getAllSchemaFields();
-      if (existingSchema && existingSchema.length > 0) {
-        return false;
-      }
-
       // ترحيل schema
       var rawSchema = localStorage.getItem(CFG.SCHEMA_LOCAL);
       if (rawSchema) {

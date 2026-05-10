@@ -242,43 +242,40 @@
     }
   }
 
-  /** إزالة التكرار من الحقول بناءً على slug */
-  function deduplicateFieldsBySlug(fields) {
+  function dedupeFields(fields) {
     var seen = {};
-    var result = [];
-    (fields || []).forEach(function (f) {
-      var slug = f.slug || '';
-      if (!seen[slug]) {
-        seen[slug] = true;
-        result.push(f);
-      }
+    return fields.filter(function (f) {
+      var key = f.slug || f.label || '';
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
     });
-    return result;
   }
 
   /** Replace-all remote schema avoids complex diff; good enough for v1 */
   async function saveSchema(fields) {
     var creds = CFG.getSupabaseCredentials();
-    // إزالة التكرار قبل الحفظ
-    var uniqueFields = deduplicateFieldsBySlug(fields);
+
+    // إزالة التكرارات قبل الحفظ
+    var clean = dedupeFields(fields || []);
 
     // حفظ في IndexedDB دائماً
     await IDB.clearSchemaFields();
-    for (var i = 0; i < uniqueFields.length; i++) {
-      await IDB.putSchemaField(uniqueFields[i]);
+    for (var i = 0; i < clean.length; i++) {
+      await IDB.putSchemaField(clean[i]);
     }
     // حفظ في localStorage كاحتياطي
-    writeLocalSchema(uniqueFields);
+    writeLocalSchema(clean);
 
     if (creds.useSupabase && getClient()) {
       try {
-        return await upsertRemoteSchema(uniqueFields);
+        return await upsertRemoteSchema(clean);
       } catch (e) {
         console.warn('[Storage] Remote schema save failed, queued for sync:', e.message || e);
-        if (SYNC) SYNC.queueSchemaUpdate(uniqueFields);
+        if (SYNC) SYNC.queueSchemaUpdate(clean);
       }
     }
-    return ENG.sortFields(uniqueFields);
+    return ENG.sortFields(clean);
   }
 
   async function loadSchema(createDefaultIfEmpty) {
@@ -286,36 +283,47 @@
     // محاولة تحميل من IndexedDB أولاً
     var idbFields = await IDB.getAllSchemaFields().catch(function () { return null; });
     if (idbFields && idbFields.length) {
-      // إزالة أي تكرار قد يكون موجوداً
-      var uniqueIdb = deduplicateFieldsBySlug(idbFields);
+      // إزالة أي تكرارات قد تكون نتجت عن migration قديم
+      var clean = dedupeFields(idbFields);
+      if (clean.length !== idbFields.length) {
+        console.warn('[Storage] Found', idbFields.length - clean.length, 'duplicate schema fields, cleaning up');
+        await IDB.clearSchemaFields();
+        for (var i = 0; i < clean.length; i++) {
+          await IDB.putSchemaField(clean[i]);
+        }
+      }
       // محاولة تحديث من السحابة إذا كان متصل
       if (creds.useSupabase && getClient() && navigator.onLine) {
         try {
           var remote = await fetchRemoteSchema();
           if (remote && remote.length) {
-            var uniqueRemote = deduplicateFieldsBySlug(remote);
             await IDB.clearSchemaFields();
-            for (var i = 0; i < uniqueRemote.length; i++) {
-              await IDB.putSchemaField(uniqueRemote[i]);
+            for (var j = 0; j < remote.length; j++) {
+              await IDB.putSchemaField(remote[j]);
             }
-            return uniqueRemote;
+            writeLocalSchema(remote);
+            return remote;
           }
         } catch (e) {
           console.warn('[Storage] Remote schema fetch failed, using IndexedDB:', e.message);
         }
       }
-      return ENG.sortFields(uniqueIdb);
+      writeLocalSchema(clean);
+      return ENG.sortFields(clean);
     }
 
     // احتياطي: التحقق من localStorage
     var local = readLocalSchema();
     if (local && local.length) {
-      var uniqueLocal = deduplicateFieldsBySlug(local);
+      var cleanLocal = dedupeFields(local);
       // ترحيل إلى IndexedDB
-      for (var j = 0; j < uniqueLocal.length; j++) {
-        await IDB.putSchemaField(uniqueLocal[j]);
+      for (var k = 0; k < cleanLocal.length; k++) {
+        await IDB.putSchemaField(cleanLocal[k]);
       }
-      return ENG.sortFields(uniqueLocal);
+      if (cleanLocal.length !== local.length) {
+        writeLocalSchema(cleanLocal);
+      }
+      return ENG.sortFields(cleanLocal);
     }
     if (createDefaultIfEmpty) return saveSchema(ENG.defaultDemoSchema());
     return [];
