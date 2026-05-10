@@ -328,6 +328,21 @@
     ordersUI.refresh();
   };
 
+  window.DOMS.onSyncComplete = function () {
+    // إعادة تحميل الطلبات والـ schema بعد المزامنة بنجاح
+    storage.loadOrders().then(function (o) {
+      ordersUI.setOrders(o);
+    }).catch(function (e) {
+      console.warn('[App] Sync reload orders failed:', e);
+    });
+    storage.loadSchema(false).then(function (fields) {
+      ordersUI.syncFields(fields);
+      schemaUI.setFields(fields);
+    }).catch(function (e) {
+      console.warn('[App] Sync reload schema failed:', e);
+    });
+  };
+
   function init() {
     console.log('App: بدء تهيئة التطبيق الرئيسي...');
 

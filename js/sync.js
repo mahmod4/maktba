@@ -76,7 +76,7 @@
     return queueChange('update', 'schema_fields', 'schema', fields);
   }
 
-  // ── Main Sync ──
+  // ── Main Sync (Bidirectional) ──
   async function attemptSync() {
     if (!isOnline || isSyncing || !IDB) return;
     var creds = CFG && CFG.getSupabaseCredentials ? CFG.getSupabaseCredentials() : {};
@@ -86,28 +86,30 @@
 
     isSyncing = true;
     updateStatusIndicators();
-    console.log('[Sync] Starting sync...');
+    console.log('[Sync] Starting bidirectional sync...');
 
     try {
+      // المرحلة 1: دفع التغييرات المحلية للسحابة
       var pending = await IDB.getPendingSyncItems();
-      if (!pending.length) {
-        console.log('[Sync] No pending items');
-        isSyncing = false;
-        updateStatusIndicators();
-        return;
-      }
-
-      console.log('[Sync] Processing', pending.length, 'items');
-      for (var i = 0; i < pending.length; i++) {
-        var item = pending[i];
-        try {
-          await processSyncItem(item);
-          await IDB.removeSyncItem(item.id);
-        } catch (e) {
-          console.warn('[Sync] Item failed:', item.id, e.message);
-          await IDB.updateSyncItemStatus(item.id, 'failed');
+      if (pending.length) {
+        console.log('[Sync] Pushing', pending.length, 'local changes to remote');
+        for (var i = 0; i < pending.length; i++) {
+          var item = pending[i];
+          try {
+            await processSyncItem(item);
+            await IDB.removeSyncItem(item.id);
+          } catch (e) {
+            console.warn('[Sync] Push failed for item', item.id, e.message);
+            await IDB.updateSyncItemStatus(item.id, 'failed');
+          }
         }
       }
+
+      // المرحلة 2: جذب التغييرات من السحابة ودمجها محلياً
+      await pullAndMerge();
+
+      // المرحلة 3: تحديث UI
+      notifySyncComplete();
       console.log('[Sync] Completed');
     } catch (e) {
       console.error('[Sync] Sync error:', e);
@@ -117,6 +119,50 @@
     }
   }
 
+  async function pullAndMerge() {
+    if (!storage || !storage.fetchRemoteOrders || !storage.mergeRemoteOrders) return;
+
+    try {
+      // جذب الطلبات من السحابة
+      var remoteOrders = await storage.fetchRemoteOrders();
+      if (remoteOrders && remoteOrders.length) {
+        var result = await storage.mergeRemoteOrders(remoteOrders);
+        if (result.changed) {
+          console.log('[Sync] Merged', result.count, 'remote orders, local data updated');
+        }
+      }
+    } catch (e) {
+      console.warn('[Sync] Pull orders failed:', e.message);
+    }
+
+    try {
+      // جذب الـ schema من السحابة
+      var remoteSchema = await storage.fetchRemoteSchema();
+      if (remoteSchema && remoteSchema.length) {
+        await storage.mergeRemoteSchema(remoteSchema);
+        console.log('[Sync] Merged remote schema');
+      }
+    } catch (e) {
+      console.warn('[Sync] Pull schema failed:', e.message);
+    }
+
+    // تسجيل وقت آخر مزامنة ناجحة
+    try {
+      await IDB.setMetadata('last_sync_at', new Date().toISOString());
+    } catch (e) { /* ignore */ }
+  }
+
+  function notifySyncComplete() {
+    // إعلام باقي التطبيق بإعادة تحميل البيانات
+    if (window.DOMS && window.DOMS.onSyncComplete) {
+      window.DOMS.onSyncComplete();
+    }
+    // إطلاق حدث مخصص
+    try {
+      window.dispatchEvent(new CustomEvent('doms:sync-complete', { detail: { timestamp: new Date().toISOString() } }));
+    } catch (e) { /* ignore */ }
+  }
+
   async function processSyncItem(item) {
     if (!storage) throw new Error('Storage not available');
     var client = storage.getClient();
@@ -124,12 +170,10 @@
 
     if (item.table === 'orders') {
       if (item.action === 'insert') {
-        // تحقق إذا الطلب موجود قبل الإدراج
-        var existing = await storage.loadOrders().then(function (orders) {
-          return orders.find(function (o) { return o.id === item.recordId; });
-        }).catch(function () { return null; });
-        if (existing) {
-          // تحديث بدل إدراج
+        // تحقق إذا الطلب موجود قبل الإدراج (للتجنب تكرار UUID)
+        var existing = await client.from('orders').select('id').eq('id', item.recordId).limit(1);
+        if (existing && existing.data && existing.data.length) {
+          // موجود - تحديث بدل إدراج
           await storage.updateRemoteOrder(item.recordId, {
             status: item.data.status,
             reference: item.data.reference,
@@ -145,7 +189,7 @@
       }
     } else if (item.table === 'schema_fields') {
       if (item.action === 'update' && item.data) {
-        // تحديث schema كاملة
+        // لا نحفظ schema مباشرة للسحابة - نترك pullAndMerge تتعامل مع الدمج
         await storage.saveSchema(item.data);
       }
     }
@@ -193,21 +237,29 @@
       if (isSyncing) {
         syncPill.textContent = '🔄 يتم المزامنة...';
         syncPill.className = 'status-pill syncing';
-      } else {
-        // تحقق من وجود عناصر معلقة
-        if (IDB) {
-          IDB.getPendingSyncItems().then(function (items) {
-            if (items.length > 0) {
-              syncPill.textContent = '⏳ ' + items.length + ' تغيير معلق';
-              syncPill.className = 'status-pill pending';
-            } else {
+      } else if (IDB) {
+        IDB.getPendingSyncItems().then(function (items) {
+          if (items.length > 0) {
+            syncPill.textContent = '⏳ ' + items.length + ' تغيير معلق';
+            syncPill.className = 'status-pill pending';
+          } else {
+            IDB.getMetadata('last_sync_at').then(function (ts) {
+              if (ts) {
+                var d = new Date(ts);
+                var timeStr = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+                syncPill.textContent = '✅ متزامن ' + timeStr;
+              } else {
+                syncPill.textContent = '✅ متزامن';
+              }
+              syncPill.className = 'status-pill synced';
+            }).catch(function () {
               syncPill.textContent = '✅ متزامن';
               syncPill.className = 'status-pill synced';
-            }
-          }).catch(function () {
-            syncPill.textContent = '';
-          });
-        }
+            });
+          }
+        }).catch(function () {
+          syncPill.textContent = '';
+        });
       }
     }
   }

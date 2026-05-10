@@ -202,7 +202,11 @@
         ? order.data
         : {};
 
-    return { id: id, reference: ref, createdAt: createdAt, status: status, data: data };
+    var updatedAt = order.updatedAt || order.updated_at;
+    if (!updatedAt) updatedAt = createdAt;
+    else if (typeof updatedAt !== 'string') updatedAt = new Date(updatedAt).toISOString();
+
+    return { id: id, reference: ref, createdAt: createdAt, updatedAt: updatedAt, status: status, data: data };
   }
 
   function matchesOrderExtras(order, q) {

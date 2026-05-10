@@ -171,6 +171,8 @@
       status: r.status,
       createdAt: r.created_at,
       created_at: r.created_at,
+      updatedAt: r.updated_at,
+      updated_at: r.updated_at,
       data: r.data,
     });
   }
@@ -191,6 +193,7 @@
       reference: n.reference,
       status: n.status,
       created_at: n.createdAt,
+      updated_at: n.updatedAt,
       data: n.data || {},
     };
     var oid = n.id;
@@ -215,6 +218,7 @@
     if (patch.status !== undefined) up.status = patch.status;
     if (patch.reference !== undefined) up.reference = patch.reference;
     if (patch.data !== undefined) up.data = patch.data;
+    up.updated_at = new Date().toISOString();
     if (Object.keys(up).length === 0)
       throw new Error('لا توجد حقول للتحديث');
 
@@ -423,6 +427,7 @@
 
   async function appendOrder(order) {
     var n = ENG.normalizeOrder(order);
+    n.updatedAt = new Date().toISOString();
     var creds = CFG.getSupabaseCredentials();
 
     // حفظ دائماً في IndexedDB
@@ -475,6 +480,7 @@
     if (patch.reference !== undefined) order.reference = String(patch.reference || '').trim() || order.reference;
     if (patch.data !== undefined) order.data = patch.data;
     order = ENG.normalizeOrder(order);
+    order.updatedAt = new Date().toISOString();
     await IDB.putOrder(order);
 
     // حفظ snapshot في localStorage - لا تكتب [] إذا IndexedDB فارغ
@@ -560,6 +566,70 @@
     return seed;
   }
 
+  // ── Bidirectional Sync: Merge remote changes ──
+  async function mergeRemoteOrders(remoteOrders) {
+    remoteOrders = remoteOrders || [];
+    var localOrders = await IDB.getAllOrders().catch(function () { return []; });
+    var localMap = {};
+    localOrders.forEach(function (o) { localMap[o.id] = o; });
+
+    var changed = false;
+    for (var i = 0; i < remoteOrders.length; i++) {
+      var r = remoteOrders[i];
+      var local = localMap[r.id];
+      if (!local) {
+        // طلب جديد من جهاز آخر
+        await IDB.putOrder(r);
+        changed = true;
+      } else {
+        var rTime = new Date(r.updatedAt || r.createdAt || 0).getTime();
+        var lTime = new Date(local.updatedAt || local.createdAt || 0).getTime();
+        if (rTime > lTime) {
+          // الجهاز الآخر عدّل أحدث
+          await IDB.putOrder(r);
+          changed = true;
+        }
+      }
+    }
+
+    // تحديث localStorage
+    var merged = await IDB.getAllOrders();
+    writeLocalOrders(ENG.sortOrdersByDate(merged));
+    return { changed: changed, count: remoteOrders.length };
+  }
+
+  async function mergeRemoteSchema(remoteFields) {
+    remoteFields = remoteFields || [];
+    var localFields = await IDB.getAllSchemaFields().catch(function () { return []; });
+
+    // دمج: احتفظ بكل الحقول من الطرفين، استخدم الأحدث عند التعارض
+    var merged = {};
+    localFields.forEach(function (f) {
+      var key = f.id || f.slug || f.label;
+      merged[key] = f;
+    });
+
+    remoteFields.forEach(function (r) {
+      var key = r.id || r.slug || r.label;
+      var local = merged[key];
+      if (!local) {
+        merged[key] = r;
+      } else {
+        var rTime = new Date(r.updatedAt || 0).getTime();
+        var lTime = new Date(local.updatedAt || 0).getTime();
+        if (rTime > lTime) merged[key] = r;
+      }
+    });
+
+    var result = dedupeFields(Object.values(merged));
+    await IDB.clearSchemaFields();
+    for (var i = 0; i < result.length; i++) {
+      await IDB.putSchemaField(result[i]);
+    }
+    writeLocalSchema(result);
+    return result;
+  }
+
   async function testConnection() {
     return probeSupabase('');
   }
@@ -609,6 +679,10 @@
     getClient: getClient,
     testConnection: testConnection,
     probeSupabase: probeSupabase,
+    mergeRemoteOrders: mergeRemoteOrders,
+    mergeRemoteSchema: mergeRemoteSchema,
+    fetchRemoteOrders: fetchRemoteOrders,
+    fetchRemoteSchema: fetchRemoteSchema,
     exportBlob: async function () {
       var schema = await loadSchema(false);
       var orders = await loadOrders();
