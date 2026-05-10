@@ -5,9 +5,9 @@
 (function () {
   'use strict';
 
-  var IDB = window.DOMS && window.DOMS.indexedDB;
-  var storage = window.DOMS && window.DOMS.storage;
-  var CFG = window.DOMS && window.DOMS.config;
+  function getIDB() { return window.DOMS && window.DOMS.indexedDB; }
+  function getStorage() { return window.DOMS && window.DOMS.storage; }
+  function getCFG() { return window.DOMS && window.DOMS.config; }
 
   // حالة النظام
   var isOnline = navigator.onLine;
@@ -45,6 +45,7 @@
 
   // ── Sync Queue ──
   function queueChange(action, table, recordId, data) {
+    var IDB = getIDB();
     if (!IDB) return Promise.resolve();
     return IDB.addToSyncQueue({
       action: action,
@@ -78,6 +79,9 @@
 
   // ── Main Sync (Bidirectional) ──
   async function attemptSync() {
+    var IDB = getIDB();
+    var storage = getStorage();
+    var CFG = getCFG();
     if (!isOnline || isSyncing || !IDB) return;
     var creds = CFG && CFG.getSupabaseCredentials ? CFG.getSupabaseCredentials() : {};
     if (!creds.useSupabase || !storage || !storage.getClient || !storage.getClient()) {
@@ -89,6 +93,7 @@
     console.log('[Sync] Starting bidirectional sync...');
 
     try {
+      var IDB = getIDB();
       // المرحلة 1: دفع التغييرات المحلية للسحابة
       var pending = await IDB.getPendingSyncItems();
       if (pending.length) {
@@ -120,6 +125,7 @@
   }
 
   async function pullAndMerge() {
+    var storage = getStorage();
     if (!storage || !storage.fetchRemoteOrders || !storage.mergeRemoteOrders) return;
 
     try {
@@ -148,7 +154,8 @@
 
     // تسجيل وقت آخر مزامنة ناجحة
     try {
-      await IDB.setMetadata('last_sync_at', new Date().toISOString());
+      var IDB = getIDB();
+      if (IDB) await IDB.setMetadata('last_sync_at', new Date().toISOString());
     } catch (e) { /* ignore */ }
   }
 
@@ -164,6 +171,7 @@
   }
 
   async function processSyncItem(item) {
+    var storage = getStorage();
     if (!storage) throw new Error('Storage not available');
     var client = storage.getClient();
     if (!client) throw new Error('Supabase not available');
@@ -233,6 +241,7 @@
 
     // تحديث شارة المزامنة
     var syncPill = document.getElementById('syncStatus');
+    var IDB = getIDB();
     if (syncPill) {
       if (isSyncing) {
         syncPill.textContent = '🔄 يتم المزامنة...';

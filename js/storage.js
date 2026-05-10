@@ -6,7 +6,7 @@
   var CFG = window.DOMS.config;
   var ENG = window.DOMS.engine;
   var IDB = window.DOMS.indexedDB;
-  var SYNC = window.DOMS.sync;
+  function getSync() { return window.DOMS && window.DOMS.sync; }
 
   function readLocalSchema() {
     try {
@@ -276,7 +276,7 @@
         return await upsertRemoteSchema(clean);
       } catch (e) {
         console.warn('[Storage] Remote schema save failed, queued for sync:', e.message || e);
-        if (SYNC) SYNC.queueSchemaUpdate(clean);
+        var s = getSync(); if (s) s.queueSchemaUpdate(fields);
       }
     }
     return ENG.sortFields(clean);
@@ -373,10 +373,7 @@
         try {
           var rows = await fetchRemoteOrders();
           if (rows && rows.length) {
-            for (var k = 0; k < rows.length; k++) {
-              await IDB.putOrder(rows[k]);
-            }
-            writeLocalOrders(ENG.sortOrdersByDate(rows));
+            await mergeRemoteOrders(rows);
             return ENG.sortOrdersByDate(rows);
           }
         } catch (e) {
@@ -391,18 +388,12 @@
       try {
         var remoteRows = await fetchRemoteOrders();
         if (remoteRows && remoteRows.length) {
-          // دمج: احتفظ بالبيانات المحلية + أضف الجديد من السحابة
-          var localIds = {};
-          idbOrders.forEach(function (o) { localIds[o.id] = true; });
-          var merged = idbOrders.slice();
-          remoteRows.forEach(function (r) {
-            if (!localIds[r.id]) {
-              merged.push(r);
-              IDB.putOrder(r);
-            }
-          });
-          writeLocalOrders(ENG.sortOrdersByDate(merged));
-          return ENG.sortOrdersByDate(merged);
+          var merged = await mergeRemoteOrders(remoteRows);
+          if (merged.changed) {
+            console.log('[Storage] Merged', merged.count, 'remote orders during load');
+          }
+          var allAfterMerge = await IDB.getAllOrders();
+          return ENG.sortOrdersByDate(allAfterMerge);
         }
       } catch (e) {
         console.warn('[Storage] Remote orders fetch failed, using IndexedDB:', e.message);
@@ -450,10 +441,10 @@
           return remote;
         } catch (e) {
           console.warn('[Storage] Remote insert failed, queued for sync:', e.message || e);
-          if (SYNC) SYNC.queueOrderInsert(n);
+          var s = getSync(); if (s) s.queueOrderInsert(n);
         }
       } else {
-        if (SYNC) SYNC.queueOrderInsert(n);
+        var s = getSync(); if (s) s.queueOrderInsert(n);
       }
     }
 
@@ -501,10 +492,10 @@
           return await updateRemoteOrder(id, patch);
         } catch (e) {
           console.warn('[Storage] Remote update failed, queued for sync:', e.message || e);
-          if (SYNC) SYNC.queueOrderUpdate(id, patch);
+          var s = getSync(); if (s) s.queueOrderUpdate(id, patch);
         }
       } else {
-        if (SYNC) SYNC.queueOrderUpdate(id, patch);
+        var s = getSync(); if (s) s.queueOrderUpdate(id, patch);
       }
     }
 
@@ -532,10 +523,10 @@
           return await deleteRemoteOrder(id);
         } catch (e) {
           console.warn('[Storage] Remote delete failed, queued for sync:', e.message || e);
-          if (SYNC) SYNC.queueOrderDelete(id);
+          var s = getSync(); if (s) s.queueOrderDelete(id);
         }
       } else {
-        if (SYNC) SYNC.queueOrderDelete(id);
+        var s2 = getSync(); if (s2) s2.queueOrderDelete(id);
       }
     }
   }
