@@ -10,6 +10,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/styles.css" />
+    <link rel="manifest" href="manifest.json" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(function(reg) { console.log('[SW] Registered:', reg.scope); })
+          .catch(function(err) { console.warn('[SW] Registration failed:', err); });
+      }
+    </script>
   </head>
   <body>
     <!-- شاشة تسجيل الدخول -->
@@ -86,7 +94,11 @@
           </button>
         </nav>
         <div class="sidebar-footer">
-          <div class="storage-pill" id="storageStatus" title="حالة التخزين">محلي</div>
+          <div class="status-indicators">
+            <div class="status-pill" id="connectionStatus" title="حالة الاتصال">🌐 متصل</div>
+            <div class="status-pill" id="syncStatus" title="حالة المزامنة">✅ متزامن</div>
+            <div class="storage-pill" id="storageStatus" title="حالة التخزين">محلي</div>
+          </div>
         </div>
       </aside>
 
@@ -220,7 +232,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
     <script src="js/config.js"></script>
     <script src="js/engine.js"></script>
+    <script src="js/indexeddb.js"></script>
     <script src="js/storage.js"></script>
+    <script src="js/sync.js"></script>
     <script src="js/ui-schema.js"></script>
     <script src="js/ui-orders.js"></script>
     <script src="js/app.js"></script>

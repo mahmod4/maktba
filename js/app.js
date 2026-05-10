@@ -113,7 +113,7 @@
     box.appendChild(b);
   }
 
-  /** شارة المحلي / Supabase أسفل الشريط الجانبي */
+  /** شارة المحلي / Supabase أسفل الشريط الجانبي + مؤشرات الاتصال والمزامنة */
   function updateStoragePill() {
     var st = document.getElementById('storageStatus');
     if (!st) return;
@@ -122,8 +122,13 @@
       st.textContent = 'سحابي (Supabase)';
       st.classList.add('is-cloud');
     } else {
-      st.textContent = 'محلي';
+      st.textContent = 'محلي (IndexedDB)';
       st.classList.remove('is-cloud');
+    }
+
+    // تحديث مؤشرات المزامنة
+    if (window.DOMS.sync) {
+      window.DOMS.sync.updateStatusIndicators();
     }
   }
 
@@ -140,14 +145,33 @@
     bar.appendChild(s);
   };
 
-  /** تحميل أولي: بنية الحقوق + قائمة الطلبات */
+  /** تحميل أولي: بنية الحقوق + قائمة الطلبات + تهيئة IndexedDB */
   async function bootstrapData() {
+    // تهيئة IndexedDB أولاً
+    if (window.DOMS.indexedDB) {
+      try {
+        await window.DOMS.indexedDB.openDB();
+        // محاولة ترحيل البيانات القديمة من localStorage
+        var migrated = await window.DOMS.indexedDB.migrateFromLocalStorage();
+        if (migrated) console.log('[App] Migrated data from localStorage to IndexedDB');
+      } catch (e) {
+        console.warn('[App] IndexedDB init failed, falling back to localStorage:', e);
+      }
+    }
+
     var fields = await storage.loadSchema(true);
     ordersUI.syncFields(fields);
     schemaUI.setFields(fields);
     var orders = await storage.loadOrders();
     ordersUI.setOrders(orders);
     updateStoragePill();
+
+    // تحديث مؤشرات المزامنة
+    if (window.DOMS.sync) {
+      window.DOMS.sync.updateStatusIndicators();
+      // بدء المزامنة الدورية كل 30 ثانية
+      window.DOMS.sync.startPeriodicSync(30000);
+    }
   }
 
   function wireNavigation() {

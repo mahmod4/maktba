@@ -6,6 +6,7 @@
   'use strict';
 
   var AUTH_KEY = 'doms_auth_session';
+  var OFFLINE_USERS_KEY = 'doms_offline_users_v1'; // قائمة المستخدمين المسجلين محلياً
   var supabase = null;
 
   /**
@@ -199,21 +200,56 @@
   }
 
   /**
+   * تسجيل مستخدم محلياً (offline) - يحفظ البريد للاستخدام المستقبلي
+   */
+  function saveOfflineUser(email) {
+    try {
+      var users = JSON.parse(localStorage.getItem(OFFLINE_USERS_KEY) || '[]');
+      if (!Array.isArray(users)) users = [];
+      if (!users.includes(email)) {
+        users.push(email);
+        localStorage.setItem(OFFLINE_USERS_KEY, JSON.stringify(users));
+      }
+    } catch (e) {
+      console.warn('[Auth] Failed to save offline user:', e);
+    }
+  }
+
+  function getOfflineUsers() {
+    try {
+      var users = JSON.parse(localStorage.getItem(OFFLINE_USERS_KEY) || '[]');
+      return Array.isArray(users) ? users : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function isKnownOfflineUser(email) {
+    return getOfflineUsers().includes(email);
+  }
+
+  /**
    * وضع تجريبي: تسجيل دخول محلي بدون خادم
    */
-  function demoLogin(email, password) {
+  function demoLogin(email, password, isOfflineMode) {
     return new Promise(function(resolve, reject) {
       if (!email || !password) {
         reject(new Error('يرجى إدخال البريد وكلمة المرور'));
         return;
       }
+      var userId = isKnownOfflineUser(email)
+        ? 'offline-known-' + email
+        : 'demo-' + Date.now();
       var session = {
-        user: { id: 'demo-' + Date.now(), email: email, role: 'authenticated' },
-        access_token: 'demo-token-' + Math.random().toString(36).slice(2),
-        refresh_token: 'demo-refresh-' + Math.random().toString(36).slice(2),
-        expires_at: Date.now() + 86400000
+        user: { id: userId, email: email, role: 'authenticated' },
+        access_token: 'offline-token-' + Math.random().toString(36).slice(2),
+        refresh_token: 'offline-refresh-' + Math.random().toString(36).slice(2),
+        expires_at: Date.now() + 86400000,
+        offlineMode: !!isOfflineMode
       };
       saveSessionData(session);
+      // حفظ المستخدم في قائمة المستخدمين المحليين
+      saveOfflineUser(email);
       resolve({ success: true, user: session.user, session: session });
     });
   }
@@ -365,6 +401,9 @@
       }
     }
 
+    // عرض مؤشر حالة الاتصال في شاشة تسجيل الدخول
+    updateLoginConnectionStatus();
+
     // ربط حدث تسجيل الدخول
     var loginForm = document.getElementById('loginForm');
     if (loginForm) {
@@ -422,17 +461,53 @@
         submitBtn.textContent = 'جاري الدخول...';
 
         var useDemo = !credentials.url || !credentials.key;
+        var isOffline = !navigator.onLine;
+        var knownUser = isKnownOfflineUser(email);
+
+        // إذا كان offline و المستخدم معروف محلياً - سمح له بالدخول
+        // إذا كان offline و غير معروف - سمح له بـ "وضع العمل المحلي"
+        if (isOffline && !useDemo) {
+          if (errorEl) {
+            errorEl.textContent = knownUser
+              ? 'وضع العمل بدون إنترنت - يتم الدخول محلياً'
+              : 'وضع العمل بدون إنترنت - سيتم المزامنة عند عودة الاتصال';
+            errorEl.style.color = '#059669';
+            errorEl.hidden = false;
+          }
+          demoLogin(email, password, true)
+            .then(function(result) {
+              console.log('[Auth] Offline login success:', result.user.email);
+              showApp();
+              startAppIfNeeded();
+            })
+            .catch(function(error) {
+              if (errorEl) {
+                errorEl.textContent = error.message;
+                errorEl.style.color = '';
+                errorEl.hidden = false;
+              }
+            })
+            .finally(function() {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'دخول';
+            });
+          return;
+        }
+
         var authPromise = useDemo ? demoLogin(email, password) : login(email, password);
 
         authPromise
           .then(function(result) {
             console.log('Auth: تسجيل الدخول نجح:', result.user.email);
+            // حفظ المستخدم في قائمة المستخدمين المعروفين
+            saveOfflineUser(email);
             showApp();
             startAppIfNeeded();
           })
           .catch(function(error) {
             if (errorEl) {
               errorEl.textContent = error.message;
+              errorEl.style.color = '';
               errorEl.hidden = false;
             }
           })
@@ -457,6 +532,27 @@
 
   // تصدير الدوال للاستخدام الخارجي
   window.DOMS = window.DOMS || {};
+  // إضافة مؤشر حالة الاتصال في شاشة تسجيل الدخول
+  function updateLoginConnectionStatus() {
+    var loginScreen = document.getElementById('loginScreen');
+    if (!loginScreen) return;
+    var existingBadge = loginScreen.querySelector('.connection-badge');
+    if (existingBadge) existingBadge.remove();
+
+    var badge = document.createElement('div');
+    badge.className = 'connection-badge';
+    badge.style.cssText = 'position:absolute;top:12px;left:12px;padding:6px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;' +
+      (navigator.onLine
+        ? 'background:#ecfdf5;color:#065f46;border:1px solid #6ee7b7;'
+        : 'background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;');
+    badge.textContent = navigator.onLine ? '🌐 متصل بالإنترنت' : '📴 وضع العمل بدون إنترنت';
+    loginScreen.style.position = 'relative';
+    loginScreen.appendChild(badge);
+  }
+
+  window.addEventListener('online', updateLoginConnectionStatus);
+  window.addEventListener('offline', updateLoginConnectionStatus);
+
   window.DOMS.auth = {
     isAuthenticated: isAuthenticated,
     isAuthenticatedSync: isAuthenticatedSync,
@@ -466,7 +562,8 @@
     logout: logout,
     showLoginScreen: showLoginScreen,
     showApp: showApp,
-    init: init
+    init: init,
+    updateLoginConnectionStatus: updateLoginConnectionStatus
   };
 
   // تهيئة عند تحميل الصفحة

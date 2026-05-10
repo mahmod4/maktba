@@ -349,6 +349,63 @@ body.sidebar-open {
   color: #075985;
 }
 
+.status-indicators {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.32rem 0.64rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.status-pill.online {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.status-pill.offline {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.status-pill.syncing {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e40af;
+  animation: pulse 1.5s infinite;
+}
+
+.status-pill.pending {
+  background: #fefce8;
+  border-color: #facc15;
+  color: #854d0e;
+}
+
+.status-pill.synced {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
 .main {
   display: flex;
   flex-direction: column;
