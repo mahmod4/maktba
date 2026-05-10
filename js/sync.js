@@ -45,19 +45,26 @@
 
   // ── Sync Queue ──
   function queueChange(action, table, recordId, data) {
+    console.log('[Sync] queueChange:', action, table, recordId);
     var IDB = getIDB();
-    if (!IDB) return Promise.resolve();
+    if (!IDB) {
+      console.warn('[Sync] queueChange skipped: IDB not available');
+      return Promise.resolve();
+    }
     return IDB.addToSyncQueue({
       action: action,
       table: table,
       recordId: recordId,
       data: data
     }).then(function () {
+      console.log('[Sync] queueChange queued successfully:', action, table, recordId);
       updateStatusIndicators();
       // محاولة مزامنة فورية إذا كان online
       if (isOnline && !isSyncing) {
         attemptSync().catch(function () {});
       }
+    }).catch(function (e) {
+      console.error('[Sync] queueChange failed:', action, table, recordId, e.message || e);
     });
   }
 
@@ -182,6 +189,7 @@
   }
 
   async function processSyncItem(item) {
+    console.log('[Sync] processSyncItem:', item.action, item.table, item.recordId);
     var storage = getStorage();
     if (!storage) throw new Error('Storage not available');
     var client = storage.getClient();
@@ -191,19 +199,24 @@
       if (item.action === 'insert') {
         // تحقق إذا الطلب موجود قبل الإدراج (للتجنب تكرار UUID)
         var existing = await client.from('orders').select('id').eq('id', item.recordId).limit(1);
+        console.log('[Sync] insert check existing:', existing);
         if (existing && existing.data && existing.data.length) {
           // موجود - تحديث بدل إدراج
+          console.log('[Sync] Order exists, updating instead of insert');
           await storage.updateRemoteOrder(item.recordId, {
             status: item.data.status,
             reference: item.data.reference,
             data: item.data.data
           });
         } else {
+          console.log('[Sync] Order not found, inserting new');
           await storage.insertRemoteOrder(item.data);
         }
       } else if (item.action === 'update') {
+        console.log('[Sync] Updating order', item.recordId);
         await storage.updateRemoteOrder(item.recordId, item.data);
       } else if (item.action === 'delete') {
+        console.log('[Sync] Deleting order', item.recordId);
         await storage.deleteRemoteOrder(item.recordId);
       }
     } else if (item.table === 'schema_fields') {
@@ -212,6 +225,7 @@
         await storage.saveSchema(item.data);
       }
     }
+    console.log('[Sync] processSyncItem completed:', item.action, item.table, item.recordId);
   }
 
   // ── Conflict Resolution ──

@@ -235,7 +235,9 @@
   async function deleteRemoteOrder(id) {
     var client = getClient();
     if (!client) throw new Error('Supabase غير مُهيّأ');
+    console.log('[Storage] deleteRemoteOrder calling Supabase for id:', id);
     var res = await client.from('orders').delete().eq('id', id);
+    console.log('[Storage] deleteRemoteOrder res:', res);
     if (res.error) throw res.error;
   }
 
@@ -424,6 +426,7 @@
   async function appendOrder(order) {
     var n = ENG.normalizeOrder(order);
     n.updatedAt = new Date().toISOString();
+    console.log('[Storage] appendOrder:', n.id, 'online=', navigator.onLine);
     var creds = CFG.getSupabaseCredentials();
 
     // حفظ دائماً في IndexedDB
@@ -443,14 +446,18 @@
       if (navigator.onLine) {
         try {
           var remote = await insertRemoteOrder(n);
+          console.log('[Storage] appendOrder remote insert success:', remote.id);
           return remote;
         } catch (e) {
           console.warn('[Storage] Remote insert failed, queued for sync:', e.message || e);
           var s = getSync(); if (s) s.queueOrderInsert(n);
         }
       } else {
+        console.log('[Storage] appendOrder offline, queuing insert');
         var s = getSync(); if (s) s.queueOrderInsert(n);
       }
+    } else {
+      console.log('[Storage] appendOrder: Supabase not configured, local only');
     }
 
     return n;
@@ -508,6 +515,7 @@
   }
 
   async function removeOrder(id) {
+    console.log('[Storage] removeOrder:', id, 'online=', navigator.onLine);
     var creds = CFG.getSupabaseCredentials();
 
     // حذف من IndexedDB دائماً
@@ -525,14 +533,19 @@
     if (creds.useSupabase && getClient()) {
       if (navigator.onLine) {
         try {
-          return await deleteRemoteOrder(id);
+          var res = await deleteRemoteOrder(id);
+          console.log('[Storage] removeOrder remote delete success:', id);
+          return res;
         } catch (e) {
           console.warn('[Storage] Remote delete failed, queued for sync:', e.message || e);
           var s = getSync(); if (s) s.queueOrderDelete(id);
         }
       } else {
+        console.log('[Storage] removeOrder offline, queuing delete');
         var s2 = getSync(); if (s2) s2.queueOrderDelete(id);
       }
+    } else {
+      console.log('[Storage] removeOrder: Supabase not configured, local only');
     }
   }
 
