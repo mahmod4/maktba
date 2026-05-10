@@ -329,13 +329,16 @@
   };
 
   window.DOMS.onSyncComplete = function () {
+    console.log('[App] onSyncComplete triggered');
     // إعادة تحميل الطلبات والـ schema بعد المزامنة بنجاح
     storage.loadOrders().then(function (o) {
+      console.log('[App] onSyncComplete loaded', o.length, 'orders');
       ordersUI.setOrders(o);
     }).catch(function (e) {
       console.warn('[App] Sync reload orders failed:', e);
     });
     storage.loadSchema(false).then(function (fields) {
+      console.log('[App] onSyncComplete loaded', fields.length, 'schema fields');
       ordersUI.syncFields(fields);
       schemaUI.setFields(fields);
     }).catch(function (e) {

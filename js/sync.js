@@ -93,9 +93,11 @@
     console.log('[Sync] Starting bidirectional sync...');
 
     try {
+      console.log('[Sync] === attemptSync starting ===');
       var IDB = getIDB();
       // المرحلة 1: دفع التغييرات المحلية للسحابة
       var pending = await IDB.getPendingSyncItems();
+      console.log('[Sync] Pending sync items:', pending.length);
       if (pending.length) {
         console.log('[Sync] Pushing', pending.length, 'local changes to remote');
         for (var i = 0; i < pending.length; i++) {
@@ -126,16 +128,25 @@
 
   async function pullAndMerge() {
     var storage = getStorage();
-    if (!storage || !storage.fetchRemoteOrders || !storage.mergeRemoteOrders) return;
+    if (!storage || !storage.fetchRemoteOrders || !storage.mergeRemoteOrders) {
+      console.warn('[Sync] pullAndMerge skipped: storage or methods unavailable');
+      return;
+    }
 
     try {
       // جذب الطلبات من السحابة
       var remoteOrders = await storage.fetchRemoteOrders();
+      console.log('[Sync] Fetched', remoteOrders ? remoteOrders.length : 0, 'orders from remote');
       if (remoteOrders && remoteOrders.length) {
         var result = await storage.mergeRemoteOrders(remoteOrders);
+        console.log('[Sync] mergeRemoteOrders result:', result);
         if (result.changed) {
           console.log('[Sync] Merged', result.count, 'remote orders, local data updated');
+        } else {
+          console.log('[Sync] No order changes needed after merge');
         }
+      } else {
+        console.log('[Sync] No remote orders to merge');
       }
     } catch (e) {
       console.warn('[Sync] Pull orders failed:', e.message);

@@ -181,8 +181,11 @@
     var client = getClient();
     if (!client) throw new Error('Supabase غير مُهيّأ');
     var res = await client.from('orders').select('*').order('created_at', { ascending: false });
+    console.log('[Storage] fetchRemoteOrders res:', res);
     if (res.error) throw res.error;
-    return (res.data || []).map(remoteRowToOrder);
+    var orders = (res.data || []).map(remoteRowToOrder);
+    console.log('[Storage] fetchRemoteOrders parsed:', orders.length, 'orders');
+    return orders;
   }
 
   async function insertRemoteOrder(order) {
@@ -206,7 +209,9 @@
     } catch (e) { /* ignore */ }
     if (user && user.id) row.user_id = user.id;
 
+    console.log('[Storage] insertRemoteOrder row:', row);
     var res = await client.from('orders').insert(row).select().single();
+    console.log('[Storage] insertRemoteOrder res:', res);
     if (res.error) throw res.error;
     return remoteRowToOrder(res.data);
   }
@@ -561,32 +566,36 @@
   async function mergeRemoteOrders(remoteOrders) {
     remoteOrders = remoteOrders || [];
     var localOrders = await IDB.getAllOrders().catch(function () { return []; });
+    console.log('[Storage] mergeRemoteOrders: local=' + localOrders.length + ', remote=' + remoteOrders.length);
     var localMap = {};
     localOrders.forEach(function (o) { localMap[o.id] = o; });
 
-    var changed = false;
+    var added = 0;
+    var updated = 0;
     for (var i = 0; i < remoteOrders.length; i++) {
       var r = remoteOrders[i];
       var local = localMap[r.id];
       if (!local) {
         // طلب جديد من جهاز آخر
         await IDB.putOrder(r);
-        changed = true;
+        added++;
       } else {
         var rTime = new Date(r.updatedAt || r.createdAt || 0).getTime();
         var lTime = new Date(local.updatedAt || local.createdAt || 0).getTime();
         if (rTime > lTime) {
           // الجهاز الآخر عدّل أحدث
           await IDB.putOrder(r);
-          changed = true;
+          updated++;
         }
       }
     }
+    var changed = added > 0 || updated > 0;
+    console.log('[Storage] mergeRemoteOrders: added=' + added + ', updated=' + updated + ', changed=' + changed);
 
     // تحديث localStorage
     var merged = await IDB.getAllOrders();
     writeLocalOrders(ENG.sortOrdersByDate(merged));
-    return { changed: changed, count: remoteOrders.length };
+    return { changed: changed, count: remoteOrders.length, added: added, updated: updated };
   }
 
   async function mergeRemoteSchema(remoteFields) {
