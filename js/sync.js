@@ -144,16 +144,13 @@
       // جذب الطلبات من السحابة
       var remoteOrders = await storage.fetchRemoteOrders();
       console.log('[Sync] Fetched', remoteOrders ? remoteOrders.length : 0, 'orders from remote');
-      if (remoteOrders && remoteOrders.length) {
-        var result = await storage.mergeRemoteOrders(remoteOrders);
-        console.log('[Sync] mergeRemoteOrders result:', result);
-        if (result.changed) {
-          console.log('[Sync] Merged', result.count, 'remote orders, local data updated');
-        } else {
-          console.log('[Sync] No order changes needed after merge');
-        }
+      // بننادي mergeRemoteOrders دايماً حتى لو السحابة فاضية — عشان نمسح الطلبات اللي اتحذفت
+      var result = await storage.mergeRemoteOrders(remoteOrders || []);
+      console.log('[Sync] mergeRemoteOrders result:', result);
+      if (result.changed) {
+        console.log('[Sync] Merged', result.count, 'remote orders, local data updated (deleted=' + result.deleted + ')');
       } else {
-        console.log('[Sync] No remote orders to merge');
+        console.log('[Sync] No order changes needed after merge');
       }
     } catch (e) {
       console.warn('[Sync] Pull orders failed:', e.message);
