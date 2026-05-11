@@ -308,12 +308,9 @@
         try {
           var remote = await fetchRemoteSchema();
           if (remote && remote.length) {
-            await IDB.clearSchemaFields();
-            for (var j = 0; j < remote.length; j++) {
-              await IDB.putSchemaField(remote[j]);
-            }
-            writeLocalSchema(remote);
-            return remote;
+            // نستخدم mergeRemoteSchema بدل الاستبدال الكامل — عشان نمسك التغييرات المحلية
+            var merged = await mergeRemoteSchema(remote);
+            return ENG.sortFields(merged);
           }
         } catch (e) {
           console.warn('[Storage] Remote schema fetch failed, using IndexedDB:', e.message);
