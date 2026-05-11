@@ -581,6 +581,20 @@
     var localMap = {};
     localOrders.forEach(function (o) { localMap[o.id] = o; });
 
+    // لا نحذف طلبات محلية إذا كانت ما زالت في قائمة انتظار المزامنة (offline→online)
+    var pendingOrderIds = {};
+    try {
+      var pendingItems = await IDB.getPendingSyncItems();
+      for (var p = 0; p < pendingItems.length; p++) {
+        var it = pendingItems[p];
+        if (it && it.table === 'orders' && it.recordId) {
+          pendingOrderIds[it.recordId] = true;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     // بناء خريطة للطلبات البعيدة
     var remoteMap = {};
     remoteOrders.forEach(function (r) { remoteMap[r.id] = r; });
@@ -613,10 +627,13 @@
     // أو (2) عملنا sync قبل كده (last_sync_at موجود)
     var lastSync = await IDB.getMetadata('last_sync_at').catch(function () { return null; });
     var hasSyncedBefore = !!lastSync;
-    if (remoteOrders.length > 0 || hasSyncedBefore) {
+    // مهم: إذا السحابة رجعت فاضية ممكن يكون سببها RLS/تسجيل دخول، فعدم حذف المحلي يمنع فقد بيانات.
+    // لذلك: لا ننفذ حذف مبني على السحابة إلا إذا كان لدينا قائمة Remote غير فارغة.
+    if (remoteOrders.length > 0) {
       for (var j = 0; j < localOrders.length; j++) {
         var lo = localOrders[j];
         if (!remoteMap[lo.id]) {
+          if (pendingOrderIds[lo.id]) continue;
           // الطلب ده مش موجود في السحابة = اتمسح
           await IDB.deleteOrder(lo.id);
           deleted++;
@@ -656,7 +673,7 @@
       }
     });
 
-    var result = dedupeFields(Object.values(merged));
+    var result = ENG.sortFields(dedupeFields(Object.values(merged)));
     await IDB.clearSchemaFields();
     for (var i = 0; i < result.length; i++) {
       await IDB.putSchemaField(result[i]);
