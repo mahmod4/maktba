@@ -210,7 +210,8 @@
     if (user && user.id) row.user_id = user.id;
 
     console.log('[Storage] insertRemoteOrder row:', row);
-    var res = await client.from('orders').insert(row).select().single();
+    // استخدم upsert لتجنب مشاكل تكرار UUID عند مزامنة عدة أجهزة أو عند إعادة المحاولة بعد offline
+    var res = await client.from('orders').upsert(row, { onConflict: 'id' }).select().single();
     console.log('[Storage] insertRemoteOrder res:', res);
     if (res.error) throw res.error;
     return remoteRowToOrder(res.data);
